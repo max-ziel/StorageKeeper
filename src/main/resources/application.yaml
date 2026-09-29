@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: storagekeeper
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
