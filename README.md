@@ -2,6 +2,8 @@
 
 Pantry-App – Java 21, Spring Boot 4, Ports & Adapters, Gradle (Kotlin DSL).
 
+Planung und Milestones: [docs/ROADMAP.md](docs/ROADMAP.md)
+
 ## Build & Start
 
 ```bash
