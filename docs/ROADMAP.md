@@ -26,7 +26,3 @@ und die ArchUnit-Regeln bleiben bestehen.
 - Web-Frontend
 - Barcode-Scan (Open Food Facts API als weiterer Outbound-Adapter)
 - Benachrichtigungen bei Ablauf
-
-## Offen
-
-- Bedeutung von „Modus B“ (Arbeitsteilung bei der Umsetzung)
