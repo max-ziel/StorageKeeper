@@ -15,10 +15,22 @@ jobs:
       pull-requests: write
       checks: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
           fetch-depth: 0  # a full history is required for pull request analysis
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: 'gradle'
+      - name: Run tests with coverage
+        run: ./gradlew test jacocoTestReport
+      - name: Provide coverage data to Qodana
+        run: |
+          mkdir -p .qodana/code-coverage
+          cp build/reports/jacoco/test/jacocoTestReport.xml .qodana/code-coverage/
       - name: 'Qodana Scan'
         uses: JetBrains/qodana-action@v2026.1
         with:
