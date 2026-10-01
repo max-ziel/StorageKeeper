@@ -1,4 +1,5 @@
 # StorageKeeper
+[![Qodana](https://github.com/max-ziel/StorageKeeper/actions/workflows/qodana_code_quality.yml/badge.svg)](https://github.com/max-ziel/StorageKeeper/actions/workflows/qodana_code_quality.yml)
 
 Pantry-App – Java 25, Spring Boot 4, Ports & Adapters, Gradle (Kotlin DSL).
 
