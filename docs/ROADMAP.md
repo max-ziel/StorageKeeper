@@ -5,7 +5,7 @@ und die ArchUnit-Regeln bleiben bestehen.
 
 ## Entscheidungen
 
-- Java 21, Spring Boot
+- Java 25, Spring Boot
 - Ports & Adapters (Hexagonal), Abhängigkeitsrichtung per ArchUnit erzwungen
 - Gradle mit Kotlin DSL
 
