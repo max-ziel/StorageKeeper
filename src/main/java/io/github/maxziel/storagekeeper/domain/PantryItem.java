@@ -5,6 +5,12 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * A product stored in the pantry.
+ * Entity and aggregate root: it has an identity
+ * ({@link PantryItemId}) and is compared by that identity only, while its state
+ * (quantity) can change over time.
+ */
 public class PantryItem {
 
     private final PantryItemId pantryItemId;
@@ -19,9 +25,9 @@ public class PantryItem {
      * @param expiryDate best-before date, or {@code null} if the product has none
      */
     public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate) {
-        this.pantryItemId = Objects.requireNonNull(pantryItemId, "id must no be null");
-        this.itemName = Objects.requireNonNull(itemName, "name must no be null");
-        this.quantity = Objects.requireNonNull(quantity, "quantity must no be null");
+        this.pantryItemId = Objects.requireNonNull(pantryItemId, "id must not be null");
+        this.itemName = Objects.requireNonNull(itemName, "name must not be null");
+        this.quantity = Objects.requireNonNull(quantity, "quantity must not be null");
         this.expiryDate = expiryDate;
     }
 

@@ -15,7 +15,7 @@ public record ItemName(String value) {
         }
         value = value.strip();
         if (value.length() > MAX_LENGTH) {
-            throw  new IllegalArgumentException("name must be at most" + MAX_LENGTH + " characters");
+            throw  new IllegalArgumentException("name must be at most " + MAX_LENGTH + " characters");
         }
     }
 }

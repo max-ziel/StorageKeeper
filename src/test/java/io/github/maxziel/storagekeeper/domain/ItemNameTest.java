@@ -5,14 +5,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 class ItemNameTest {
 
     @Test
     void stripsSurroundingWhitespace() {
-        assertThat(new ItemName("   Reis").value()).isEqualTo("Reis");
+        assertThat(new ItemName("   Reis   ").value()).isEqualTo("Reis");
     }
 
     @ParameterizedTest

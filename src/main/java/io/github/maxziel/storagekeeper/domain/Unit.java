@@ -9,5 +9,5 @@ public enum Unit {
     KILOGRAM,
     MILLILITER,
     LITER,
-    PACKAGE,
+    PACKAGE
 }
