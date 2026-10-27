@@ -1,7 +1,7 @@
 # Domain-Modell
 
-Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.
-Stand: M1 (Vorratsarktikel, In-Memory-Persistenz).
+Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
+Stand: M2 (Vorratsartikel, gespeichert in PostgreSQL).
 
 ## Grundbegriffe
 
@@ -134,18 +134,25 @@ flowchart LR
         Model[PantryItem und Value Objects]
     end
     subgraph SG_PERS["adapter.out.persistence"]
-        Repo[InMemoryPantryItemRepository]
+        Repo[JpaPantryItemRepository]
+        Entity[PantryItemJpaEntity]
+        SpringData[[SpringDataPantryItemRepository]]
     end
+    DB[(PostgreSQL)]
     Web --> PortIn
     Service -. implementiert .-> PortIn
     Service --> Model
     Service --> PortOut
     Repo -. implementiert .-> PortOut
+    Repo --> SpringData
+    Repo --> Entity
+    SpringData --> DB
 ```
 
 - Abhängigkeiten zeigen immer nach innen: Adapter → Application → Domain.
-- Die Application kennt nur die Interfaces in `port.out`, nicht deren Implementierung.
-  In M2 wird `InMemoryPantryItemRepository` durch einen JPA-Adapter ersetzt, ohne dass sich Service oder Domain ändern.
+- Die Application kennt nur die Interfaces in `port.out`, nicht deren Implementierung.  
+
+Beim Wechsel von der In-Memory-Liste (M1) auf PostgreSQL (M2) haben sich Service und Domain deshalb nicht geändert.
 
 ## Ablauf eines Requests
 
@@ -193,3 +200,72 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Ungültiger Request (Bean Validation, unbekannte `unit`, kaputtes JSON) | 400         |
 | Domain-Regel verletzt (`IllegalArgumentException`)                     | 400         |
 | Artikel-ID unbekannt (`PantryItemNotFoundException`)                   | 404         |
+
+
+## Persistenz
+
+Gespeichert wird in PostgreSQL. Zuständig ist allein das Paket `adapter.out.persistence`.
+
+### Tabelle `pantry_item`
+
+Angelegt durch die Flyway-Migration `src/main/resources/db/migration/V1__create_pantry_item.sql`.
+
+| Spalte        | Typ            | Null? | Herkunft im Domain-Modell                       |
+|---------------|----------------|-------|-------------------------------------------------|
+| `id`          | `UUID`         | nein  | `PantryItemId.value` (Primärschlüssel)          |
+| `name`        | `VARCHAR(100)` | nein  | `ItemName.value`                                |
+| `amount`      | `NUMERIC`      | nein  | `Quantity.amount`; `CHECK (amount >= 0)`        |
+| `unit`        | `VARCHAR(20)`  | nein  | `Quantity.unit` als Name, z. B. `KILOGRAM`      |
+| `expiry_date` | `DATE`         | ja    | `expiryDate`                                    |
+
+`NUMERIC` ohne feste Nachkommastellen speichert den Wert genau so, wie er kommt (`1.5` bleibt `1.5`).
+Bei `NUMERIC(12,3)` käme `1.500` zurück, und `Quantity` würde dann nicht mehr als gleich gelten,
+weil `BigDecimal.equals` die Nachkommastellen mit vergleicht.
+
+### Domain-Klasse und JPA-Entity sind getrennt
+
+```mermaid
+classDiagram
+    direction LR
+
+    class PantryItem {
+        Domain, ohne JPA
+    }
+    class PantryItemJpaEntity {
+        -UUID id
+        -String name
+        -BigDecimal amount
+        -Unit unit
+        -LocalDate expiryDate
+        ~fromDomain(PantryItem item)$ PantryItemJpaEntity
+        ~toDomain() PantryItem
+    }
+    class SpringDataPantryItemRepository {
+        JpaRepository von PantryItemJpaEntity und UUID
+    }
+    class JpaPantryItemRepository
+
+    JpaPantryItemRepository ..|> PantryItemRepository
+    JpaPantryItemRepository --> SpringDataPantryItemRepository
+    SpringDataPantryItemRepository --> PantryItemJpaEntity
+    PantryItemJpaEntity ..> PantryItem : mappt
+```
+
+JPA verlangt einen parameterlosen Konstruktor und veränderbare Felder. Würde `PantryItem` selbst
+als `@Entity` markiert, müsste die Domain diese Zugeständnisse machen und von Jakarta abhängen,
+was `ArchitectureTest` verbietet. Deshalb gibt es eine eigene Klasse `PantryItemJpaEntity`,
+die nur im Persistence-Adapter sichtbar ist:
+
+- `fromDomain(item)` übersetzt beim Speichern in eine Tabellenzeile.
+- `toDomain()` baut beim Laden über den normalen Konstruktor ein `PantryItem` auf.
+  Dabei laufen alle Domain-Prüfungen erneut; ungültige Daten in der Tabelle würden sofort auffallen.
+- `SpringDataPantryItemRepository` ist ein Interface; die Implementierung erzeugt Spring Data zur Laufzeit.
+- `JpaPantryItemRepository` implementiert den Port `PantryItemRepository` und ist die einzige Klasse,
+  die der Rest der Anwendung (über das Interface) zu sehen bekommt.
+
+### Schema-Änderungen
+
+- Das Schema wird **nur** über Flyway geändert. Für jede Änderung kommt eine neue Datei
+  `V2__…sql`, `V3__…sql` usw. hinzu; bereits ausgeführte Migrationen werden nie verändert.
+- Hibernate legt keine Tabellen an (`spring.jpa.hibernate.ddl-auto: validate`). Es prüft beim Start nur,
+  ob Entity und Tabelle zusammenpassen, und bricht sonst ab.

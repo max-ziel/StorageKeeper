@@ -1,0 +1,9 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: storagekeeper
+      POSTGRES_USER: storagekeeper
+      POSTGRES_PASSWORD: storagekeeper
+    ports:
+      - "5432"
