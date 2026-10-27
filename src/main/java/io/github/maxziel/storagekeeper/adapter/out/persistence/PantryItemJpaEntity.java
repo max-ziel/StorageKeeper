@@ -32,11 +32,15 @@ class PantryItemJpaEntity {
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
 
+    /** Plain id instead of a JPA relation: items and locations are separate aggregates. */
+    @Column(name = "storage_location_id", nullable = false)
+    private UUID storageLocationId;
+
     /** Required by JPA. */
-    protected PantryItemJpaEntity(){
+    protected PantryItemJpaEntity() {
     }
 
-    static PantryItemJpaEntity fromDomain(PantryItem pantryItem){
+    static PantryItemJpaEntity fromDomain(PantryItem pantryItem) {
         PantryItemJpaEntity entity = new PantryItemJpaEntity();
 
         entity.id = pantryItem.getPantryItemId().value();
@@ -44,6 +48,7 @@ class PantryItemJpaEntity {
         entity.amount = pantryItem.getQuantity().amount();
         entity.unit = pantryItem.getQuantity().unit();
         entity.expiryDate = pantryItem.getExpiryDate().orElse(null);
+        entity.storageLocationId = pantryItem.getStorageLocationId().value();
 
         return entity;
     }
@@ -53,6 +58,7 @@ class PantryItemJpaEntity {
                 new PantryItemId(id),
                 new ItemName(name),
                 new Quantity(amount, unit),
-                expiryDate);
+                expiryDate,
+                new StorageLocationId(storageLocationId));
     }
 }

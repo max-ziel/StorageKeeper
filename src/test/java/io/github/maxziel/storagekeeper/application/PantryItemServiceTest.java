@@ -3,6 +3,7 @@ package io.github.maxziel.storagekeeper.application;
 import io.github.maxziel.storagekeeper.application.port.in.AddPantryItemCommand;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 
+import io.github.maxziel.storagekeeper.application.port.out.StorageLocationRepository;
 import io.github.maxziel.storagekeeper.domain.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,31 +18,58 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-public class PantryItemServiceTest {
+class PantryItemServiceTest {
 
     @Mock
     private PantryItemRepository repository;
+
+    @Mock
+    private StorageLocationRepository storageLocationRepository;
 
     @InjectMocks
     private PantryItemService service;
 
     private final PantryItem rice = PantryItem.create(
-            new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), LocalDate.of(2027, 3, 1));
+            new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), LocalDate.of(2027, 3, 1),
+            StorageLocationId.DEFAULT);
 
     @Test
-    void addCreatesAndSavesItem() {
+    void addWithoutLocationUsesDefaultLocation() {
+        when(storageLocationRepository.existsById(StorageLocationId.DEFAULT)).thenReturn(true);
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        var command = new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null);
+        var command = new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, null);
 
         PantryItem added = service.add(command);
 
         assertThat(added.getItemName()).isEqualTo(rice.getItemName());
         assertThat(added.getQuantity()).isEqualTo(rice.getQuantity());
+        assertThat(added.getStorageLocationId()).isEqualTo(StorageLocationId.DEFAULT);
         verify(repository).save(added);
+    }
+
+    @Test
+    void addWithGivenLocationUsesIt() {
+        StorageLocationId cellar = StorageLocationId.newId();
+        when(storageLocationRepository.existsById(cellar)).thenReturn(true);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PantryItem added = service.add(new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, cellar));
+
+        assertThat(added.getStorageLocationId()).isEqualTo(cellar);
+    }
+
+    @Test
+    void addWithUnknownLocationFails() {
+        StorageLocationId unknown = StorageLocationId.newId();
+        when(storageLocationRepository.existsById(unknown)).thenReturn(false);
+        var command = new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, unknown);
+
+        assertThatExceptionOfType(StorageLocationNotFoundException.class)
+                .isThrownBy(() -> service.add(command));
+        verify(repository, never()).save(any());
     }
 
     @Test
