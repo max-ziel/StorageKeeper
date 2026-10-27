@@ -9,14 +9,16 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /** JSON representation of a pantry item. */
-public record PantryItemResponse(UUID id, String name, BigDecimal amount, Unit unit, LocalDate expiryDate) {
+public record PantryItemResponse(UUID id, String name, BigDecimal amount, Unit unit, LocalDate expiryDate,
+                                 UUID storageLocationId) {
+
     static PantryItemResponse from(PantryItem pantryItem) {
-        return  new PantryItemResponse(
-          pantryItem.getPantryItemId().value(),
-          pantryItem.getItemName().value(),
-          pantryItem.getQuantity().amount(),
-          pantryItem.getQuantity().unit(),
-          pantryItem.getExpiryDate().orElse(null)
-        );
+        return new PantryItemResponse(
+                pantryItem.getPantryItemId().value(),
+                pantryItem.getItemName().value(),
+                pantryItem.getQuantity().amount(),
+                pantryItem.getQuantity().unit(),
+                pantryItem.getExpiryDate().orElse(null),
+                pantryItem.getStorageLocationId().value());
     }
 }

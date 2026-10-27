@@ -5,23 +5,29 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.*;
 
 class PantryItemTest {
 
     private final PantryItem rice = PantryItem.create(
             new ItemName("Reis"),
             new Quantity(BigDecimal.ONE, Unit.KILOGRAM),
-            LocalDate.of(2027, 3, 1)
+            LocalDate.of(2027, 3, 1),
+            StorageLocationId.DEFAULT
     );
 
     @Test
     void createAssignsNewIds() {
-        PantryItem other = PantryItem.create(rice.getItemName(), rice.getQuantity(), null);
+        PantryItem other = PantryItem.create(rice.getItemName(), rice.getQuantity(), null, StorageLocationId.DEFAULT);
 
         assertThat(other.getPantryItemId()).isNotEqualTo(rice.getPantryItemId());
         assertThat(other.getExpiryDate()).isEmpty();
+    }
+
+    @Test
+    void storageLocationIsRequired() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> PantryItem.create(rice.getItemName(), rice.getQuantity(), null, null));
     }
 
     @Test
@@ -42,7 +48,8 @@ class PantryItemTest {
                 rice.getPantryItemId(),
                 new ItemName("Anderer Name"),
                 new Quantity(BigDecimal.TEN, Unit.GRAM),
-                null
+                null,
+                StorageLocationId.newId()
         );
 
         assertThat(sameIdOtherState).isEqualTo(rice).hasSameHashCodeAs(rice);

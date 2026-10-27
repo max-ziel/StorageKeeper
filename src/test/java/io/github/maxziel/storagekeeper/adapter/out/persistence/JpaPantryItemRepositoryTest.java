@@ -6,23 +6,29 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 @DataJpaTest
-@Import({TestcontainersConfiguration.class, JpaPantryItemRepository.class})
+@Import({TestcontainersConfiguration.class, JpaPantryItemRepository.class, JpaStorageLocationRepository.class})
 class JpaPantryItemRepositoryTest {
 
     @Autowired
     private JpaPantryItemRepository repository;
 
+    @Autowired
+    private JpaStorageLocationRepository storageLocationRepository;
+
     private final PantryItem rice = PantryItem.create(
             new ItemName("Reis"),
             new Quantity(new BigDecimal("1.5"), Unit.KILOGRAM),
-            LocalDate.of(2027,3,1)
+            LocalDate.of(2027, 3, 1),
+            StorageLocationId.DEFAULT
     );
 
     @Test
@@ -35,11 +41,37 @@ class JpaPantryItemRepositoryTest {
         assertThat(loaded.getItemName()).isEqualTo(rice.getItemName());
         assertThat(loaded.getQuantity()).isEqualTo(rice.getQuantity());
         assertThat(loaded.getExpiryDate()).isEqualTo(rice.getExpiryDate());
+        assertThat(loaded.getStorageLocationId()).isEqualTo(StorageLocationId.DEFAULT);
+    }
+
+    @Test
+    void itemCanBeStoredInUserDefinedLocation() {
+        StorageLocation cellar = storageLocationRepository.save(StorageLocation.create(new LocationName("Keller")));
+        PantryItem wine = PantryItem.create(new ItemName("Wein"), new Quantity(BigDecimal.ONE, Unit.PIECE), null,
+                cellar.getStorageLocationId());
+
+        repository.save(wine);
+
+        assertThat(repository.findById(wine.getPantryItemId()).orElseThrow().getStorageLocationId())
+                .isEqualTo(cellar.getStorageLocationId());
+    }
+
+    @Test
+    void itemInUnknownLocationIsRejectedByDatabase() {
+        PantryItem lost = PantryItem.create(new ItemName("Mehl"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null,
+                StorageLocationId.newId());
+
+        assertThatExceptionOfType(DataIntegrityViolationException.class)
+                .isThrownBy(() -> {
+                    repository.save(lost);
+                    repository.findAll();
+                });
     }
 
     @Test
     void itemWithoutExpiryDateCanBeStored() {
-        PantryItem salt = PantryItem.create(new ItemName("Salz"), new Quantity(BigDecimal.ONE, Unit.PACKAGE), null);
+        PantryItem salt = PantryItem.create(new ItemName("Salz"), new Quantity(BigDecimal.ONE, Unit.PACKAGE), null,
+                StorageLocationId.DEFAULT);
         repository.save(salt);
 
         assertThat(repository.findById(salt.getPantryItemId()).orElseThrow().getExpiryDate()).isEmpty();

@@ -17,23 +17,26 @@ public class PantryItem {
     private final ItemName itemName;
     private Quantity quantity;
     private final LocalDate expiryDate;
+    private final StorageLocationId storageLocationId;
 
     /**
-     * Restores an item with a known id, e.g. when loading it from storage.
+     * Restores an item with a known id, e.g., when loading it from storage.
      * Use {@link #create} for new items.
      *
      * @param expiryDate best-before date, or {@code null} if the product has none
+     * @param storageLocationId where the item is kept; every item has exactly one location
      */
-    public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate) {
+    public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId) {
         this.pantryItemId = Objects.requireNonNull(pantryItemId, "id must not be null");
         this.itemName = Objects.requireNonNull(itemName, "name must not be null");
         this.quantity = Objects.requireNonNull(quantity, "quantity must not be null");
         this.expiryDate = expiryDate;
+        this.storageLocationId = Objects.requireNonNull(storageLocationId, "storage location must not be null");
     }
 
     /** Creates a new item with a freshly generated id. */
-    public static PantryItem create(ItemName itemName, Quantity quantity, LocalDate expiryDate) {
-        return new PantryItem(PantryItemId.newId(), itemName, quantity, expiryDate);
+    public static PantryItem create(ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId) {
+        return new PantryItem(PantryItemId.newId(), itemName, quantity, expiryDate, storageLocationId);
     }
 
     /** Sets a new amount; the unit stays the same. */
@@ -55,6 +58,10 @@ public class PantryItem {
 
     public Optional<LocalDate> getExpiryDate() {
         return Optional.ofNullable(expiryDate);
+    }
+
+    public StorageLocationId getStorageLocationId() {
+        return storageLocationId;
     }
 
     @Override

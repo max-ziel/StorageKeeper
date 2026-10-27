@@ -1,6 +1,7 @@
 package io.github.maxziel.storagekeeper.adapter.in.web;
 
 import io.github.maxziel.storagekeeper.application.PantryItemNotFoundException;
+import io.github.maxziel.storagekeeper.application.StorageLocationNotFoundException;
 import io.github.maxziel.storagekeeper.application.port.in.AddPantryItemUseCase;
 import io.github.maxziel.storagekeeper.application.port.in.ChangeQuantityUseCase;
 import io.github.maxziel.storagekeeper.application.port.in.ListPantryItemUseCase;
@@ -38,11 +39,12 @@ class PantryItemControllerTest {
     private RemovePantryItemUseCase removePantryItem;
 
     @Test
-    void addReturnsCreatedItemWithLocation() throws  Exception {
+    void addReturnsCreatedItemWithLocation() throws Exception {
         PantryItem rice = PantryItem.create(
                 new ItemName("Reis"),
                 new Quantity(BigDecimal.ONE, Unit.KILOGRAM),
-                LocalDate.of(2027,3,1)
+                LocalDate.of(2027, 3, 1),
+                StorageLocationId.DEFAULT
         );
 
         when(addPantryItem.add(any())).thenReturn(rice);
@@ -56,7 +58,8 @@ class PantryItemControllerTest {
                 .andExpect(header().string("Location", "/api/pantry-items/" + rice.getPantryItemId()))
                 .andExpect(jsonPath("$.name").value("Reis"))
                 .andExpect(jsonPath("$.unit").value("KILOGRAM"))
-                .andExpect(jsonPath("$.expiryDate").value("2027-03-01"));
+                .andExpect(jsonPath("$.expiryDate").value("2027-03-01"))
+                .andExpect(jsonPath("$.storageLocationId").value(StorageLocationId.DEFAULT.toString()));
     }
 
     @Test
@@ -68,6 +71,20 @@ class PantryItemControllerTest {
                 )
                 .andExpect(status().isBadRequest())
                 .andExpect(header().string("Content-Type", MediaType.APPLICATION_PROBLEM_JSON_VALUE));
+    }
+
+    @Test
+    void addWithUnknownLocationReturnsBadRequest() throws Exception {
+        StorageLocationId unknown = StorageLocationId.newId();
+        when(addPantryItem.add(any())).thenThrow(new StorageLocationNotFoundException(unknown));
+
+        mockMvc.perform(post("/api/pantry-items")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Reis", "amount": 1, "unit": "KILOGRAM", "storageLocationId": "%s"}
+                                """.formatted(unknown)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Storage location " + unknown + " not found"));
     }
 
     @Test
