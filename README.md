@@ -3,16 +3,21 @@
 
 Pantry-App – Java 25, Spring Boot 4, Ports & Adapters, Gradle (Kotlin DSL).
 
-Planung und Milestones: [docs/ROADMAP.md](docs/ROADMAP.md)
-Domain-Modell und Request-Ablauf: [docs/domain-model.md](docs/DOMAIN_MODEL.md)
+Planung und Milestones: [docs/ROADMAP.md](docs/ROADMAP.md)  
+Domain-Modell und Request-Ablauf: [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md)
 
 ## Build & Start
 
+Voraussetzungen: JDK 25 und ein laufendes Docker (für PostgreSQL).
+
 ```bash
-./gradlew build      # kompiliert, testet (inkl. Architekturregeln)
-./gradlew bootRun    # startet auf http://localhost:8080
+./gradlew build      # kompiliert, testet (inkl. Architekturregeln und Tests gegen PostgreSQL per Testcontainers)
+./gradlew bootRun    # startet PostgreSQL per Docker Compose (compose.yaml) und die App auf http://localhost:8080
 curl localhost:8080/actuator/health
 ```
+
+`bootRun` startet den Datenbank-Container automatisch und stoppt ihn beim Beenden wieder; die Daten bleiben erhalten.
+Das Schema legt Flyway beim Start an (`src/main/resources/db/migration`).
 
 ## REST-API
 
@@ -41,8 +46,7 @@ curl -X PATCH localhost:8080/api/pantry-items/<id>/quantity \
 curl -i -X DELETE localhost:8080/api/pantry-items/<id>
 ```
 
-Die Daten liegen in M1 nur im Speicher und sind nach einem Neustart weg.
-
+Die Daten werden in PostgreSQL gespeichert und bleiben über Neustarts erhalten.
 
 ## Paketstruktur
 
