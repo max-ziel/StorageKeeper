@@ -31,7 +31,7 @@ public class PantryItem {
         this.expiryDate = expiryDate;
     }
 
-    /** Creates a new item with a feshly generated id. */
+    /** Creates a new item with a freshly generated id. */
     public static PantryItem create(ItemName itemName, Quantity quantity, LocalDate expiryDate) {
         return new PantryItem(PantryItemId.newId(), itemName, quantity, expiryDate);
     }

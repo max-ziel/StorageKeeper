@@ -2,6 +2,7 @@ package io.github.maxziel.storagekeeper.application;
 
 import io.github.maxziel.storagekeeper.application.port.in.AddPantryItemCommand;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
+
 import io.github.maxziel.storagekeeper.domain.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,7 +21,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class PantryItemTest {
+public class PantryItemServiceTest {
 
     @Mock
     private PantryItemRepository repository;
