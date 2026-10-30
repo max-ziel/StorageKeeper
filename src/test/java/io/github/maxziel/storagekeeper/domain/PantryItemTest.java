@@ -54,4 +54,19 @@ class PantryItemTest {
 
         assertThat(sameIdOtherState).isEqualTo(rice).hasSameHashCodeAs(rice);
     }
+
+    @Test
+    void daysUntilExpiryCountsFromToday() {
+        assertThat(rice.daysUntilExpiry(LocalDate.of(2027, 2, 26))).isEqualTo(3);
+        assertThat(rice.daysUntilExpiry(LocalDate.of(2027, 3, 1))).isZero();
+        assertThat(rice.daysUntilExpiry(LocalDate.of(2027, 3, 3))).isEqualTo(-2);
+    }
+
+    @Test
+    void daysUntilExpiryNeedsAnExpiryDate() {
+        PantryItem salt = PantryItem.create(new ItemName("Salz"), new Quantity(BigDecimal.ONE, Unit.PACKAGE), null,
+                StorageLocationId.DEFAULT);
+
+        assertThatIllegalStateException().isThrownBy(() -> salt.daysUntilExpiry(LocalDate.of(2027, 1, 1)));
+    }
 }

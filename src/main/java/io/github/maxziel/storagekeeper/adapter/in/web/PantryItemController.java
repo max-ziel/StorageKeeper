@@ -1,12 +1,11 @@
 package io.github.maxziel.storagekeeper.adapter.in.web;
 
-import io.github.maxziel.storagekeeper.application.port.in.AddPantryItemUseCase;
-import io.github.maxziel.storagekeeper.application.port.in.ChangeQuantityUseCase;
-import io.github.maxziel.storagekeeper.application.port.in.ListPantryItemUseCase;
-import io.github.maxziel.storagekeeper.application.port.in.RemovePantryItemUseCase;
+import io.github.maxziel.storagekeeper.application.port.in.*;
 import io.github.maxziel.storagekeeper.domain.PantryItem;
 import io.github.maxziel.storagekeeper.domain.PantryItemId;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,17 +25,20 @@ class PantryItemController {
     private final ListPantryItemUseCase listPantryItems;
     private final ChangeQuantityUseCase changeQuantity;
     private final RemovePantryItemUseCase removePantryItem;
+    private final ListExpiringPantryItemsUseCase listExpiringPantryItems;
 
     PantryItemController(
             AddPantryItemUseCase addPantryItem,
             ListPantryItemUseCase listPantryItems,
             ChangeQuantityUseCase changeQuantity,
-            RemovePantryItemUseCase removePantryItem
+            RemovePantryItemUseCase removePantryItem,
+            ListExpiringPantryItemsUseCase listExpiringPantryItems
     ) {
         this.addPantryItem = addPantryItem;
         this.listPantryItems = listPantryItems;
         this.changeQuantity = changeQuantity;
         this.removePantryItem = removePantryItem;
+        this.listExpiringPantryItems = listExpiringPantryItems;
     }
 
     @PostMapping
@@ -51,6 +53,14 @@ class PantryItemController {
     List<PantryItemResponse> listAll() {
         return listPantryItems.listAll().stream()
                 .map(PantryItemResponse::from).toList();
+    }
+
+    /** Items that expire within the next {@code days} days or have already expired, earliest first. */
+    @GetMapping("/expiring")
+    List<ExpiringPantryItemResponse> listExpiring(@RequestParam(defaultValue = "7") @Min(0) @Max(365) int days) {
+        return listExpiringPantryItems.listExpiringWithin(days).stream()
+                .map(ExpiringPantryItemResponse::from)
+                .toList();
     }
 
     @PatchMapping("/{id}/quantity")

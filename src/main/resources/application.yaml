@@ -14,3 +14,7 @@ management:
     web:
       exposure:
         include: health,info
+
+storagekeeper:
+  # Time zone that decides when a day starts, e.g., for "expires today".
+  time-zone: Europe/Berlin

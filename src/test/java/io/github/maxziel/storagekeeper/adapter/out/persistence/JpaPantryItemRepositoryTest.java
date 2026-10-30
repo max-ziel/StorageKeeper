@@ -101,4 +101,21 @@ class JpaPantryItemRepositoryTest {
     void findByUnknownIdReturnsEmpty() {
         assertThat(repository.findById(PantryItemId.newId())).isEmpty();
     }
+
+    @Test
+    void findWithExpiryDateUpToReturnsItemsUpToTheDateSortedByExpiry() {
+        PantryItem milk = PantryItem.create(new ItemName("Milch"), new Quantity(BigDecimal.ONE, Unit.LITER),
+                LocalDate.of(2027, 2, 24), StorageLocationId.DEFAULT);
+        PantryItem flour = PantryItem.create(new ItemName("Mehl"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM),
+                LocalDate.of(2027, 6, 1), StorageLocationId.DEFAULT);
+        PantryItem salt = PantryItem.create(new ItemName("Salz"), new Quantity(BigDecimal.ONE, Unit.PACKAGE), null,
+                StorageLocationId.DEFAULT);
+        repository.save(rice);
+        repository.save(milk);
+        repository.save(flour);
+        repository.save(salt);
+
+        assertThat(repository.findWithExpiryDateUpTo(LocalDate.of(2027, 3, 1)))
+                .containsExactly(milk, rice);
+    }
 }

@@ -6,6 +6,7 @@ import io.github.maxziel.storagekeeper.domain.PantryItemId;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,5 +52,12 @@ class JpaPantryItemRepository implements PantryItemRepository {
 
         jpaRepository.deleteById(pantryItemId.value());
         return  true;
+    }
+
+    @Override
+    public List<PantryItem> findWithExpiryDateUpTo(LocalDate latest) {
+        return jpaRepository.findByExpiryDateLessThanEqualOrderByExpiryDateAsc(latest).stream()
+                .map(PantryItemJpaEntity::toDomain)
+                .toList();
     }
 }

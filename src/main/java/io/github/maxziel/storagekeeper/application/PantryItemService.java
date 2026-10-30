@@ -9,6 +9,8 @@ import io.github.maxziel.storagekeeper.domain.StorageLocationId;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,15 +20,19 @@ import java.util.Objects;
  */
 @Service
 public class PantryItemService implements
-        AddPantryItemUseCase, ListPantryItemUseCase, ChangeQuantityUseCase, RemovePantryItemUseCase {
+        AddPantryItemUseCase, ListPantryItemUseCase, ChangeQuantityUseCase, RemovePantryItemUseCase,
+        ListExpiringPantryItemsUseCase {
 
     private final PantryItemRepository repository;
     private final StorageLocationRepository storageLocationRepository;
+    private final Clock clock;
 
-    public PantryItemService(PantryItemRepository repository, StorageLocationRepository storageLocationRepository) {
+    public PantryItemService(PantryItemRepository repository, StorageLocationRepository storageLocationRepository,
+                             Clock clock) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
         this.storageLocationRepository =
                 Objects.requireNonNull(storageLocationRepository, "storageLocationRepository must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
     /**
@@ -47,6 +53,17 @@ public class PantryItemService implements
     @Override
     public List<PantryItem> listAll() {
         return repository.findAll();
+    }
+
+    @Override
+    public List<ExpiringPantryItem> listExpiringWithin(int days) {
+        if (days < 0) {
+            throw new IllegalArgumentException("days must not be negative");
+        }
+        LocalDate today = LocalDate.now(clock);
+        return repository.findWithExpiryDateUpTo(today.plusDays(days)).stream()
+                .map(item -> new ExpiringPantryItem(item, item.daysUntilExpiry(today)))
+                .toList();
     }
 
     @Override

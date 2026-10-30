@@ -2,6 +2,7 @@ package io.github.maxziel.storagekeeper.domain;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -62,6 +63,20 @@ public class PantryItem {
 
     public StorageLocationId getStorageLocationId() {
         return storageLocationId;
+    }
+
+    /**
+     * Days from {@code today} until the expiry date: 0 means it expires today,
+     * negative values mean it has already expired.
+     *
+     * @throws IllegalStateException if the item has no expiry date
+     */
+    public long daysUntilExpiry(LocalDate today) {
+        if (expiryDate == null) {
+            throw new IllegalStateException("item " + pantryItemId + " has no expiry date");
+        }
+
+        return ChronoUnit.DAYS.between(today, expiryDate);
     }
 
     @Override
