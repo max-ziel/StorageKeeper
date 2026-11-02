@@ -5,23 +5,29 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.*;
 
 class PantryItemTest {
 
     private final PantryItem rice = PantryItem.create(
             new ItemName("Reis"),
             new Quantity(BigDecimal.ONE, Unit.KILOGRAM),
-            LocalDate.of(2027, 3, 1)
+            LocalDate.of(2027, 3, 1),
+            StorageLocationId.DEFAULT
     );
 
     @Test
     void createAssignsNewIds() {
-        PantryItem other = PantryItem.create(rice.getItemName(), rice.getQuantity(), null);
+        PantryItem other = PantryItem.create(rice.getItemName(), rice.getQuantity(), null, StorageLocationId.DEFAULT);
 
         assertThat(other.getPantryItemId()).isNotEqualTo(rice.getPantryItemId());
         assertThat(other.getExpiryDate()).isEmpty();
+    }
+
+    @Test
+    void storageLocationIsRequired() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> PantryItem.create(rice.getItemName(), rice.getQuantity(), null, null));
     }
 
     @Test
@@ -42,9 +48,52 @@ class PantryItemTest {
                 rice.getPantryItemId(),
                 new ItemName("Anderer Name"),
                 new Quantity(BigDecimal.TEN, Unit.GRAM),
-                null
+                null,
+                StorageLocationId.newId()
         );
 
         assertThat(sameIdOtherState).isEqualTo(rice).hasSameHashCodeAs(rice);
+    }
+
+    @Test
+    void daysUntilExpiryCountsFromToday() {
+        assertThat(rice.daysUntilExpiry(LocalDate.of(2027, 2, 26))).isEqualTo(3);
+        assertThat(rice.daysUntilExpiry(LocalDate.of(2027, 3, 1))).isZero();
+        assertThat(rice.daysUntilExpiry(LocalDate.of(2027, 3, 3))).isEqualTo(-2);
+    }
+
+    @Test
+    void daysUntilExpiryNeedsAnExpiryDate() {
+        PantryItem salt = PantryItem.create(new ItemName("Salz"), new Quantity(BigDecimal.ONE, Unit.PACKAGE), null,
+                StorageLocationId.DEFAULT);
+
+        assertThatIllegalStateException().isThrownBy(() -> salt.daysUntilExpiry(LocalDate.of(2027, 1, 1)));
+    }
+
+    @Test
+    void newItemHasNoMinimum() {
+        assertThat(rice.getMinimumQuantity()).isEqualTo(new Quantity(BigDecimal.ZERO, Unit.KILOGRAM));
+        assertThat(rice.isBelowMinimum()).isFalse();
+    }
+
+    @Test
+    void isBelowMinimumOnlyWhenAmountIsLess() {
+        rice.changeMinimumAmount(new BigDecimal("2"));
+        assertThat(rice.isBelowMinimum()).isTrue();
+
+        rice.changeQuantity(new BigDecimal("2.0"));
+        assertThat(rice.isBelowMinimum()).isFalse();
+    }
+
+    @Test
+    void minimumUsesTheItemsUnit() {
+        rice.changeMinimumAmount(new BigDecimal("0.5"));
+
+        assertThat(rice.getMinimumQuantity()).isEqualTo(new Quantity(new BigDecimal("0.5"), Unit.KILOGRAM));
+    }
+
+    @Test
+    void changeMinimumAmountRejectsNegativeAmount() {
+        assertThatIllegalArgumentException().isThrownBy(() -> rice.changeMinimumAmount(new BigDecimal("-1")));
     }
 }

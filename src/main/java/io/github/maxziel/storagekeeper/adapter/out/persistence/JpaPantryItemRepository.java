@@ -1,11 +1,19 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
+import io.github.maxziel.storagekeeper.application.port.PageQuery;
+import io.github.maxziel.storagekeeper.application.port.ResultPage;
+import io.github.maxziel.storagekeeper.application.port.in.PantryItemFilter;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 import io.github.maxziel.storagekeeper.domain.PantryItem;
 import io.github.maxziel.storagekeeper.domain.PantryItemId;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,5 +59,39 @@ class JpaPantryItemRepository implements PantryItemRepository {
 
         jpaRepository.deleteById(pantryItemId.value());
         return  true;
+    }
+
+    @Override
+    public List<PantryItem> findWithExpiryDateUpTo(LocalDate latest) {
+        return jpaRepository.findByExpiryDateLessThanEqualOrderByExpiryDateAsc(latest).stream()
+                .map(PantryItemJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public ResultPage<PantryItem> search(PantryItemFilter filter, PageQuery page) {
+        Specification<PantryItemJpaEntity> specification = Specification.unrestricted();
+
+        if (filter.storageLocationId() != null) {
+            specification = specification.and(
+                    PantryItemSpecifications.inStorageLocation(filter.storageLocationId().value())
+            );
+        }
+
+        if (filter.onlyBelowMinimum()) {
+            specification = specification.and(PantryItemSpecifications.belowMinimum());
+        }
+
+        // Sorting by id as well keeps the order stable when names are equal, so no item appears on two pages.
+        PageRequest pageRequest = PageRequest.of(page.page(), page.size(), Sort.by("name","id"));
+
+        Page<PantryItemJpaEntity> result = jpaRepository.findAll(specification, pageRequest);
+
+        return new ResultPage<>(
+                result.getContent().stream().map(PantryItemJpaEntity::toDomain).toList(),
+                page.page(),
+                page.size(),
+                result.getTotalElements()
+        );
     }
 }
