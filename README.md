@@ -21,27 +21,59 @@ Das Schema legt Flyway beim Start an (`src/main/resources/db/migration`).
 
 ## REST-API
 
-Basis-URL: `http://localhost:8080/api/pantry-items`
+### Vorratsartikel – `/api/pantry-items`
 
-| Methode  | Pfad                              | Body                                        | Antwort                             |
-|----------|-----------------------------------|---------------------------------------------|-------------------------------------|
-| `POST`   | `/api/pantry-items`               | `{"name", "amount", "unit", "expiryDate"?}` | `201` + `Location`-Header + Artikel |
-| `GET`    | `/api/pantry-items`               | –                                           | `200` + Liste                       |
-| `PATCH`  | `/api/pantry-items/{id}/quantity` | `{"amount"}`                                | `200` + Artikel                     |
-| `DELETE` | `/api/pantry-items/{id}`          | –                                           | `204`                               |
+| Methode  | Pfad                              | Body / Parameter                                                                    | Antwort                                        |
+|----------|-----------------------------------|-------------------------------------------------------------------------------------|------------------------------------------------|
+| `POST`   | `/api/pantry-items`               | `{"name", "amount", "unit", "expiryDate"?, "storageLocationId"?, "minimumAmount"?}` | `201` + `Location`-Header + Artikel            |
+| `GET`    | `/api/pantry-items`               | `?storageLocationId=&belowMinimum=&page=&size=` (alle optional)                     | `200` + Seite (`content`, `totalElements`, …)  |
+| `GET`    | `/api/pantry-items/expiring`      | `?days=` (optional, 0–365, Standard 7)                                              | `200` + Liste mit `daysUntilExpiry`, `expired` |
+| `PATCH`  | `/api/pantry-items/{id}/quantity` | `{"amount"}`                                                                        | `200` + Artikel                                |
+| `PATCH`  | `/api/pantry-items/{id}/minimum`  | `{"amount"}` (`0` = kein Mindestbestand)                                            | `200` + Artikel                                |
+| `DELETE` | `/api/pantry-items/{id}`          | –                                                                                   | `204`                                          |
 
-Erlaubte Einheiten: `PIECE`, `GRAM`, `KILOGRAM`, `MILLILITER`, `LITER`, `PACKAGE`.
-Fehler kommen als `application/problem+json` (`400` bei ungültigen Eingaben, `404` bei unbekannter ID).
+- Erlaubte Einheiten: `PIECE`, `GRAM`, `KILOGRAM`, `MILLILITER`, `LITER`, `PACKAGE`.
+- Ohne `storageLocationId` landet ein Artikel im Basis-Lagerort „Vorrat“, ohne `minimumAmount` hat er keinen Mindestbestand.
+- Die Liste ist nach Name sortiert; Standard ist Seite `0` mit `20` Einträgen, höchstens `100` pro Seite.
+  `belowMinimum=true` zeigt nur Artikel, deren Menge unter dem Mindestbestand liegt.
+- `/expiring` liefert alles, was in den nächsten `days` Tagen abläuft oder schon abgelaufen ist (`daysUntilExpiry` negativ).
+
+### Lagerorte – `/api/storage-locations`
+
+| Methode | Pfad                     | Body       | Antwort                                         |
+|---------|--------------------------|------------|-------------------------------------------------|
+| `POST`  | `/api/storage-locations` | `{"name"}` | `201` + Lagerort; `409` wenn der Name existiert |
+| `GET`   | `/api/storage-locations` | –          | `200` + Liste, sortiert nach Name               |
+
+Der Basis-Lagerort „Vorrat“ existiert immer und ist in der Liste mit `"defaultLocation": true` markiert.
+
+Fehler kommen als `application/problem+json` (`400` bei ungültigen Eingaben oder unbekanntem Lagerort,
+`404` bei unbekannter Artikel-ID, `409` bei doppeltem Lagerort-Namen).
 
 ```bash
+curl localhost:8080/api/storage-locations
+
+curl -X POST localhost:8080/api/storage-locations \
+  -H 'Content-Type: application/json' -d '{"name":"Keller"}'
+
 curl -i -X POST localhost:8080/api/pantry-items \
   -H 'Content-Type: application/json' \
-  -d '{"name":"Reis","amount":1,"unit":"KILOGRAM","expiryDate":"2027-03-01"}'
+  -d '{"name":"Reis","amount":1,"unit":"KILOGRAM","expiryDate":"2027-03-01","minimumAmount":2}'
 
-curl localhost:8080/api/pantry-items
+curl -X POST localhost:8080/api/pantry-items \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Wein","amount":6,"unit":"PIECE","storageLocationId":"<id vom Keller>"}'
+
+curl 'localhost:8080/api/pantry-items?size=10'
+curl 'localhost:8080/api/pantry-items?belowMinimum=true'
+curl 'localhost:8080/api/pantry-items?storageLocationId=<id vom Keller>'
+curl 'localhost:8080/api/pantry-items/expiring?days=3'
 
 curl -X PATCH localhost:8080/api/pantry-items/<id>/quantity \
   -H 'Content-Type: application/json' -d '{"amount":0.5}'
+
+curl -X PATCH localhost:8080/api/pantry-items/<id>/minimum \
+  -H 'Content-Type: application/json' -d '{"amount":3}'
 
 curl -i -X DELETE localhost:8080/api/pantry-items/<id>
 ```

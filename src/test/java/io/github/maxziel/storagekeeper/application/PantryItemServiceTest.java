@@ -1,7 +1,10 @@
 package io.github.maxziel.storagekeeper.application;
 
+import io.github.maxziel.storagekeeper.application.port.PageQuery;
+import io.github.maxziel.storagekeeper.application.port.ResultPage;
 import io.github.maxziel.storagekeeper.application.port.in.AddPantryItemCommand;
 import io.github.maxziel.storagekeeper.application.port.in.ExpiringPantryItem;
+import io.github.maxziel.storagekeeper.application.port.in.PantryItemFilter;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 
 import io.github.maxziel.storagekeeper.application.port.out.StorageLocationRepository;
@@ -52,7 +55,7 @@ class PantryItemServiceTest {
     void addWithoutLocationUsesDefaultLocation() {
         when(storageLocationRepository.existsById(StorageLocationId.DEFAULT)).thenReturn(true);
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        var command = new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, null);
+        var command = new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, null, null);
 
         PantryItem added = service.add(command);
 
@@ -68,7 +71,7 @@ class PantryItemServiceTest {
         when(storageLocationRepository.existsById(cellar)).thenReturn(true);
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PantryItem added = service.add(new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, cellar));
+        PantryItem added = service.add(new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, cellar, null));
 
         assertThat(added.getStorageLocationId()).isEqualTo(cellar);
     }
@@ -77,7 +80,7 @@ class PantryItemServiceTest {
     void addWithUnknownLocationFails() {
         StorageLocationId unknown = StorageLocationId.newId();
         when(storageLocationRepository.existsById(unknown)).thenReturn(false);
-        var command = new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, unknown);
+        var command = new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, unknown, null);
 
         assertThatExceptionOfType(StorageLocationNotFoundException.class)
                 .isThrownBy(() -> service.add(command));
@@ -143,5 +146,46 @@ class PantryItemServiceTest {
     void listExpiringWithinRejectsNegativeDays() {
         assertThatExceptionOfType(IllegalArgumentException.class)
                 .isThrownBy(() -> service.listExpiringWithin(-1));
+    }
+
+    @Test
+    void addWithMinimumAmountSetsIt() {
+        when(storageLocationRepository.existsById(StorageLocationId.DEFAULT)).thenReturn(true);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PantryItem added = service.add(new AddPantryItemCommand(
+                rice.getItemName(), rice.getQuantity(), null, null, new BigDecimal("2")));
+
+        assertThat(added.getMinimumQuantity()).isEqualTo(new Quantity(new BigDecimal("2"), Unit.KILOGRAM));
+        assertThat(added.isBelowMinimum()).isTrue();
+    }
+
+    @Test
+    void changeMinimumAmountUpdatesAndSavesItem() {
+        when(repository.findById(rice.getPantryItemId())).thenReturn(Optional.of(rice));
+        when(repository.save(rice)).thenReturn(rice);
+
+        PantryItem changed = service.changeMinimumAmount(rice.getPantryItemId(), new BigDecimal("3"));
+
+        assertThat(changed.getMinimumQuantity().amount()).isEqualByComparingTo("3");
+    }
+
+    @Test
+    void changeMinimumAmountOfUnknownItemFails() {
+        PantryItemId unknown = PantryItemId.newId();
+        when(repository.findById(unknown)).thenReturn(Optional.empty());
+
+        assertThatExceptionOfType(PantryItemNotFoundException.class)
+                .isThrownBy(() -> service.changeMinimumAmount(unknown, BigDecimal.ONE));
+    }
+
+    @Test
+    void searchPassesFilterAndPageToRepository() {
+        PantryItemFilter filter = new PantryItemFilter(StorageLocationId.DEFAULT, true);
+        PageQuery page = new PageQuery(1, 10);
+        ResultPage<PantryItem> expected = new ResultPage<>(List.of(rice), 1, 10, 11);
+        when(repository.search(filter, page)).thenReturn(expected);
+
+        assertThat(service.search(filter, page)).isEqualTo(expected);
     }
 }

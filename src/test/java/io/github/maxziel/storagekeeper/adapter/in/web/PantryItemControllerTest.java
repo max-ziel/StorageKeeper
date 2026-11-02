@@ -2,6 +2,8 @@ package io.github.maxziel.storagekeeper.adapter.in.web;
 
 import io.github.maxziel.storagekeeper.application.PantryItemNotFoundException;
 import io.github.maxziel.storagekeeper.application.StorageLocationNotFoundException;
+import io.github.maxziel.storagekeeper.application.port.PageQuery;
+import io.github.maxziel.storagekeeper.application.port.ResultPage;
 import io.github.maxziel.storagekeeper.application.port.in.*;
 import io.github.maxziel.storagekeeper.domain.*;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,8 @@ class PantryItemControllerTest {
     private RemovePantryItemUseCase removePantryItem;
     @MockitoBean
     private ListExpiringPantryItemsUseCase listExpiringPantryItems;
+    @MockitoBean
+    private ChangeMinimumAmountUseCase changeMinimumAmount;
 
     @Test
     void addReturnsCreatedItemWithLocation() throws Exception {
@@ -125,5 +129,64 @@ class PantryItemControllerTest {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/pantry-items/expiring").param("days", "366"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void listReturnsPageWithFiltersApplied() throws Exception {
+        PantryItem rice = PantryItem.create(new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null,
+                StorageLocationId.DEFAULT);
+        rice.changeMinimumAmount(new BigDecimal("2"));
+        PantryItemFilter filter = new PantryItemFilter(StorageLocationId.DEFAULT, true);
+        when(listPantryItems.search(filter, new PageQuery(0, 5)))
+                .thenReturn(new ResultPage<>(List.of(rice), 0, 5, 6));
+
+        mockMvc.perform(get("/api/pantry-items")
+                        .param("storageLocationId", StorageLocationId.DEFAULT.toString())
+                        .param("belowMinimum", "true")
+                        .param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].name").value("Reis"))
+                .andExpect(jsonPath("$.content[0].minimumAmount").value(2))
+                .andExpect(jsonPath("$.content[0].belowMinimum").value(true))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(5))
+                .andExpect(jsonPath("$.totalElements").value(6))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    void listWithoutParametersUsesFirstPageOfTwentyWithoutFilter() throws Exception {
+        when(listPantryItems.search(PantryItemFilter.none(), new PageQuery(0, 20)))
+                .thenReturn(new ResultPage<>(List.of(), 0, 20, 0));
+
+        mockMvc.perform(get("/api/pantry-items"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalPages").value(0));
+    }
+
+    @Test
+    void listRejectsInvalidPageSize() throws Exception {
+        mockMvc.perform(get("/api/pantry-items").param("size", "0"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/pantry-items").param("size", "101"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void changeMinimumAmountReturnsUpdatedItem() throws Exception {
+        PantryItem rice = PantryItem.create(new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null,
+                StorageLocationId.DEFAULT);
+        rice.changeMinimumAmount(new BigDecimal("0.5"));
+        when(changeMinimumAmount.changeMinimumAmount(rice.getPantryItemId(), new BigDecimal("0.5"))).thenReturn(rice);
+
+        mockMvc.perform(patch("/api/pantry-items/" + rice.getPantryItemId() + "/minimum")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"amount": 0.5}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.minimumAmount").value(0.5))
+                .andExpect(jsonPath("$.belowMinimum").value(false));
     }
 }

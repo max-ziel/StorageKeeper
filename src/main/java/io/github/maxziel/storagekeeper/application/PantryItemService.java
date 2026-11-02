@@ -1,5 +1,7 @@
 package io.github.maxziel.storagekeeper.application;
 
+import io.github.maxziel.storagekeeper.application.port.PageQuery;
+import io.github.maxziel.storagekeeper.application.port.ResultPage;
 import io.github.maxziel.storagekeeper.application.port.in.*;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 import io.github.maxziel.storagekeeper.application.port.out.StorageLocationRepository;
@@ -20,8 +22,8 @@ import java.util.Objects;
  */
 @Service
 public class PantryItemService implements
-        AddPantryItemUseCase, ListPantryItemUseCase, ChangeQuantityUseCase, RemovePantryItemUseCase,
-        ListExpiringPantryItemsUseCase {
+        AddPantryItemUseCase, ListPantryItemUseCase, ChangeQuantityUseCase, ChangeMinimumAmountUseCase,
+        RemovePantryItemUseCase, ListExpiringPantryItemsUseCase {
 
     private final PantryItemRepository repository;
     private final StorageLocationRepository storageLocationRepository;
@@ -36,7 +38,8 @@ public class PantryItemService implements
     }
 
     /**
-     * Without a location in the command the item goes to {@link StorageLocationId#DEFAULT}.
+     * Without a location in the command the item goes to {@link StorageLocationId#DEFAULT};
+     * without a minimum amount the item has no minimum stock.
      *
      * @throws StorageLocationNotFoundException if the given location does not exist
      */
@@ -47,12 +50,15 @@ public class PantryItemService implements
             throw new StorageLocationNotFoundException(locationId);
         }
         PantryItem item = PantryItem.create(command.name(), command.quantity(), command.expiryDate(), locationId);
+        if (command.minimumAmount() != null) {
+            item.changeMinimumAmount(command.minimumAmount());
+        }
         return repository.save(item);
     }
 
     @Override
-    public List<PantryItem> listAll() {
-        return repository.findAll();
+    public ResultPage<PantryItem> search(PantryItemFilter filter, PageQuery page) {
+        return repository.search(filter, page);
     }
 
     @Override
@@ -68,9 +74,15 @@ public class PantryItemService implements
 
     @Override
     public PantryItem changeQuantity(PantryItemId id, BigDecimal newAmount) {
-        PantryItem item = repository.findById(id)
-                .orElseThrow(() -> new PantryItemNotFoundException(id));
+        PantryItem item = load(id);
         item.changeQuantity(newAmount);
+        return repository.save(item);
+    }
+
+    @Override
+    public PantryItem changeMinimumAmount(PantryItemId id, BigDecimal newMinimumAmount) {
+        PantryItem item = load(id);
+        item.changeMinimumAmount(newMinimumAmount);
         return repository.save(item);
     }
 
@@ -79,5 +91,9 @@ public class PantryItemService implements
         if (!repository.deleteById(id)) {
             throw new PantryItemNotFoundException(id);
         }
+    }
+
+    private PantryItem load(PantryItemId id) {
+        return repository.findById(id).orElseThrow(() -> new PantryItemNotFoundException(id));
     }
 }

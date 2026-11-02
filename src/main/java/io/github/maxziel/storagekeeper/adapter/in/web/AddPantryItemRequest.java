@@ -18,19 +18,23 @@ import java.util.UUID;
  * JSON body for {@code POST /api/pantry-items}.
  *
  * @param storageLocationId optional; without it the item goes to the default location
+ * @param minimumAmount optional minimum stock in {@code unit}; without it the item has no minimum
  */
 public record AddPantryItemRequest(
         @NotBlank @Size(max = ItemName.MAX_LENGTH) String name,
         @NotNull @PositiveOrZero BigDecimal amount,
         @NotNull Unit unit,
         LocalDate expiryDate,
-        UUID storageLocationId) {
+        UUID storageLocationId,
+        @PositiveOrZero BigDecimal minimumAmount) {
 
     AddPantryItemCommand toCommand() {
         return new AddPantryItemCommand(
                 new ItemName(name),
                 new Quantity(amount, unit),
                 expiryDate,
-                storageLocationId == null ? null : new StorageLocationId(storageLocationId));
+                storageLocationId == null ? null : new StorageLocationId(storageLocationId),
+                minimumAmount
+        );
     }
 }

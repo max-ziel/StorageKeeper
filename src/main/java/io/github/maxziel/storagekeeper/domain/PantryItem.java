@@ -19,25 +19,48 @@ public class PantryItem {
     private Quantity quantity;
     private final LocalDate expiryDate;
     private final StorageLocationId storageLocationId;
+    private BigDecimal minimumAmount;
+
+    public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId) {
+        this(pantryItemId, itemName, quantity, expiryDate, storageLocationId, BigDecimal.ZERO);
+    }
 
     /**
-     * Restores an item with a known id, e.g., when loading it from storage.
-     * Use {@link #create} for new items.
+     * Restores an item including its minimum stock.
      *
-     * @param expiryDate best-before date, or {@code null} if the product has none
-     * @param storageLocationId where the item is kept; every item has exactly one location
+     * @param minimumAmount minimum stock in the item's unit; 0 means "no minimum"
      */
-    public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId) {
+    public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate,
+                      StorageLocationId storageLocationId, BigDecimal minimumAmount) {
         this.pantryItemId = Objects.requireNonNull(pantryItemId, "id must not be null");
         this.itemName = Objects.requireNonNull(itemName, "name must not be null");
         this.quantity = Objects.requireNonNull(quantity, "quantity must not be null");
         this.expiryDate = expiryDate;
         this.storageLocationId = Objects.requireNonNull(storageLocationId, "storage location must not be null");
+        changeMinimumAmount(minimumAmount);
     }
 
     /** Creates a new item with a freshly generated id. */
     public static PantryItem create(ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId) {
         return new PantryItem(PantryItemId.newId(), itemName, quantity, expiryDate, storageLocationId);
+    }
+
+    /**
+     * Sets hte minimum stock in the item's unit. 0 means "no minimum".
+     *
+     * @throws IllegalArgumentException if the amount is negative
+     */
+    public void changeMinimumAmount(BigDecimal newMinimumAmount) {
+        // Quantity checks "not null, not negative"
+        this.minimumAmount = quantity.withAmount(newMinimumAmount).amount();
+    }
+
+    /**
+     *
+     * @return {@code true} if the current amount is below the minimum stock, i.e. the item should be bought.
+     */
+    public boolean isBelowMinimum() {
+        return quantity.amount().compareTo(minimumAmount) < 0;
     }
 
     /** Sets a new amount; the unit stays the same. */
@@ -63,6 +86,10 @@ public class PantryItem {
 
     public StorageLocationId getStorageLocationId() {
         return storageLocationId;
+    }
+
+    public Quantity getMinimumQuantity() {
+        return quantity.withAmount(minimumAmount);
     }
 
     /**

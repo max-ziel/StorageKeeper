@@ -1,5 +1,8 @@
 package io.github.maxziel.storagekeeper.application.port.out;
 
+import io.github.maxziel.storagekeeper.application.port.PageQuery;
+import io.github.maxziel.storagekeeper.application.port.ResultPage;
+import io.github.maxziel.storagekeeper.application.port.in.PantryItemFilter;
 import io.github.maxziel.storagekeeper.domain.PantryItem;
 import io.github.maxziel.storagekeeper.domain.PantryItemId;
 
@@ -30,4 +33,7 @@ public interface PantryItemRepository {
      * sorted by expiry date (earliest first). Items without an expiry date are not included.
      */
     List<PantryItem> findWithExpiryDateUpTo(LocalDate latest);
+
+    /** Returns one page of the items that match the filter, sorted by name (and id for equal names). */
+    ResultPage<PantryItem> search(PantryItemFilter filter, PageQuery page);
 }

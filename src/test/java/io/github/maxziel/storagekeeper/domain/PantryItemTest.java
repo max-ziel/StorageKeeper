@@ -69,4 +69,31 @@ class PantryItemTest {
 
         assertThatIllegalStateException().isThrownBy(() -> salt.daysUntilExpiry(LocalDate.of(2027, 1, 1)));
     }
+
+    @Test
+    void newItemHasNoMinimum() {
+        assertThat(rice.getMinimumQuantity()).isEqualTo(new Quantity(BigDecimal.ZERO, Unit.KILOGRAM));
+        assertThat(rice.isBelowMinimum()).isFalse();
+    }
+
+    @Test
+    void isBelowMinimumOnlyWhenAmountIsLess() {
+        rice.changeMinimumAmount(new BigDecimal("2"));
+        assertThat(rice.isBelowMinimum()).isTrue();
+
+        rice.changeQuantity(new BigDecimal("2.0"));
+        assertThat(rice.isBelowMinimum()).isFalse();
+    }
+
+    @Test
+    void minimumUsesTheItemsUnit() {
+        rice.changeMinimumAmount(new BigDecimal("0.5"));
+
+        assertThat(rice.getMinimumQuantity()).isEqualTo(new Quantity(new BigDecimal("0.5"), Unit.KILOGRAM));
+    }
+
+    @Test
+    void changeMinimumAmountRejectsNegativeAmount() {
+        assertThatIllegalArgumentException().isThrownBy(() -> rice.changeMinimumAmount(new BigDecimal("-1")));
+    }
 }

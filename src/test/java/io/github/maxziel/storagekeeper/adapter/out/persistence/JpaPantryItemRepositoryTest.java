@@ -1,6 +1,9 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
 import io.github.maxziel.storagekeeper.TestcontainersConfiguration;
+import io.github.maxziel.storagekeeper.application.port.PageQuery;
+import io.github.maxziel.storagekeeper.application.port.ResultPage;
+import io.github.maxziel.storagekeeper.application.port.in.PantryItemFilter;
 import io.github.maxziel.storagekeeper.domain.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -117,5 +121,60 @@ class JpaPantryItemRepositoryTest {
 
         assertThat(repository.findWithExpiryDateUpTo(LocalDate.of(2027, 3, 1)))
                 .containsExactly(milk, rice);
+    }
+
+    @Test
+    void minimumAmountIsStored() {
+        rice.changeMinimumAmount(new BigDecimal("2.5"));
+        repository.save(rice);
+
+        PantryItem loaded = repository.findById(rice.getPantryItemId()).orElseThrow();
+
+        assertThat(loaded.getMinimumQuantity()).isEqualTo(new Quantity(new BigDecimal("2.5"), Unit.KILOGRAM));
+        assertThat(loaded.isBelowMinimum()).isTrue();
+    }
+
+    @Test
+    void searchFiltersByLocationAndMinimumAndSortsByName() {
+        StorageLocation cellar = storageLocationRepository.save(StorageLocation.create(new LocationName("Keller")));
+        PantryItem wine = PantryItem.create(new ItemName("Wein"), new Quantity(BigDecimal.ONE, Unit.PIECE), null,
+                cellar.getStorageLocationId());
+        wine.changeMinimumAmount(new BigDecimal("6"));
+        PantryItem juice = PantryItem.create(new ItemName("Apfelsaft"), new Quantity(BigDecimal.TEN, Unit.LITER), null,
+                cellar.getStorageLocationId());
+        juice.changeMinimumAmount(new BigDecimal("2"));
+        rice.changeMinimumAmount(new BigDecimal("5"));
+        repository.save(wine);
+        repository.save(juice);
+        repository.save(rice);
+
+        assertThat(names(repository.search(PantryItemFilter.none(), new PageQuery(0, 10))))
+                .containsExactly("Apfelsaft", "Reis", "Wein");
+        assertThat(names(repository.search(new PantryItemFilter(cellar.getStorageLocationId(), false),
+                new PageQuery(0, 10))))
+                .containsExactly("Apfelsaft", "Wein");
+        assertThat(names(repository.search(new PantryItemFilter(null, true), new PageQuery(0, 10))))
+                .containsExactly("Reis", "Wein");
+        assertThat(names(repository.search(new PantryItemFilter(cellar.getStorageLocationId(), true),
+                new PageQuery(0, 10))))
+                .containsExactly("Wein");
+    }
+
+    @Test
+    void searchReturnsRequestedPage() {
+        for (String name : List.of("A", "B", "C", "D", "E")) {
+            repository.save(PantryItem.create(new ItemName(name), new Quantity(BigDecimal.ONE, Unit.PIECE), null,
+                    StorageLocationId.DEFAULT));
+        }
+
+        ResultPage<PantryItem> secondPage = repository.search(PantryItemFilter.none(), new PageQuery(1, 2));
+
+        assertThat(names(secondPage)).containsExactly("C", "D");
+        assertThat(secondPage.totalElements()).isEqualTo(5);
+        assertThat(secondPage.totalPages()).isEqualTo(3);
+    }
+
+    private static List<String> names(ResultPage<PantryItem> page) {
+        return page.content().stream().map(item -> item.getItemName().value()).toList();
     }
 }

@@ -36,6 +36,9 @@ class PantryItemJpaEntity {
     @Column(name = "storage_location_id", nullable = false)
     private UUID storageLocationId;
 
+    @Column(name = "minimum_amount", nullable = false)
+    private  BigDecimal minimumAmount;
+
     /** Required by JPA. */
     protected PantryItemJpaEntity() {
     }
@@ -49,6 +52,7 @@ class PantryItemJpaEntity {
         entity.unit = pantryItem.getQuantity().unit();
         entity.expiryDate = pantryItem.getExpiryDate().orElse(null);
         entity.storageLocationId = pantryItem.getStorageLocationId().value();
+        entity.minimumAmount = pantryItem.getMinimumQuantity().amount();
 
         return entity;
     }
@@ -59,6 +63,7 @@ class PantryItemJpaEntity {
                 new ItemName(name),
                 new Quantity(amount, unit),
                 expiryDate,
-                new StorageLocationId(storageLocationId));
+                new StorageLocationId(storageLocationId),
+                minimumAmount);
     }
 }
