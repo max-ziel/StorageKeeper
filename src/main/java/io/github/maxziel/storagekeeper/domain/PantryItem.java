@@ -76,6 +76,22 @@ public class PantryItem {
         this.quantity = this.quantity.withAmount(newAmount);
         recordMinimumTransition(wasBelowMinimum);
     }
+
+    /**
+     * Adds a purchased amount to the stock, e.g. after shopping. Raises the same events as
+     * {@link #changeQuantity(BigDecimal)}.
+     *
+     * @throws IllegalArgumentException if the amount is not positive
+     */
+    public void restock(BigDecimal purchasedAmount) {
+        Objects.requireNonNull(purchasedAmount, "purchased amount must not be null");
+        if (purchasedAmount.signum() <= 0) {
+            throw new IllegalArgumentException("purchased amount must be positive");
+        }
+
+        changeQuantity(quantity.amount().add(purchasedAmount));
+    }
+
     /**
      * How much is missing to reach the minimum stock, in the item's unit; zero if the item is not below its minimum.
      */

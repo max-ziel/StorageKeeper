@@ -25,7 +25,7 @@ import java.util.Objects;
 @Service
 public class PantryItemService implements
         AddPantryItemUseCase, ListPantryItemUseCase, ChangeQuantityUseCase, ChangeMinimumAmountUseCase,
-        RemovePantryItemUseCase, ListExpiringPantryItemsUseCase {
+        RemovePantryItemUseCase, ListExpiringPantryItemsUseCase, RestockPantryItemUseCase {
 
     private final PantryItemRepository repository;
     private final StorageLocationRepository storageLocationRepository;
@@ -102,6 +102,14 @@ public class PantryItemService implements
         if (!repository.deleteById(id)) {
             throw new PantryItemNotFoundException(id);
         }
+    }
+
+    @Override
+    @Transactional
+    public PantryItem restock(PantryItemId id, BigDecimal purchasedAmount) {
+        PantryItem item = load(id);
+        item.restock(purchasedAmount);
+        return saveAndPublishEvents(item);
     }
 
     private PantryItem load(PantryItemId id) {

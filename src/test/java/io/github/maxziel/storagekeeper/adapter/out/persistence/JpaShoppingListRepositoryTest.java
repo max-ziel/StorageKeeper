@@ -47,6 +47,15 @@ class JpaShoppingListRepositoryTest {
     }
 
     @Test
+    void findByIdReturnsTheEntry() {
+        pantryItemRepository.save(rice);
+        ShoppingListEntry entry = repository.save(ShoppingListEntry.create(rice.getPantryItemId(), Instant.now()));
+
+        assertThat(repository.findById(entry.getShoppingListEntryId())).contains(entry);
+        assertThat(repository.findById(ShoppingListEntryId.newId())).isEmpty();
+    }
+
+    @Test
     void deleteByPantryItemIdRemovesTheEntry() {
         pantryItemRepository.save(rice);
         repository.save(ShoppingListEntry.create(rice.getPantryItemId(), Instant.now()));

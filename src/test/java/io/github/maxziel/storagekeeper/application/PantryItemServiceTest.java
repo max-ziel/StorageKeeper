@@ -214,4 +214,25 @@ class PantryItemServiceTest {
 
         verify(eventPublisher).publish(List.of(new PantryItemFellBelowMinimum(added.getPantryItemId())));
     }
+
+    @Test
+    void restockAddsAmountAndPublishesEvents() {
+        rice.changeMinimumAmount(new BigDecimal("2"));
+        rice.pullDomainEvents();
+        when(repository.findById(rice.getPantryItemId())).thenReturn(Optional.of(rice));
+        when(repository.save(rice)).thenReturn(rice);
+
+        PantryItem restocked = service.restock(rice.getPantryItemId(), BigDecimal.ONE);
+
+        assertThat(restocked.getQuantity().amount()).isEqualByComparingTo("2");
+        verify(eventPublisher).publish(List.of(new PantryItemReachedMinimum(rice.getPantryItemId())));
+    }
+
+    @Test
+    void restockOfUnknownItemFails() {
+        when(repository.findById(any())).thenReturn(Optional.empty());
+
+        assertThatExceptionOfType(PantryItemNotFoundException.class)
+                .isThrownBy(() -> service.restock(PantryItemId.newId(), BigDecimal.ONE));
+    }
 }

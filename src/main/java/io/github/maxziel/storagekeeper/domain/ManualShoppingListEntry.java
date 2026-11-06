@@ -1,0 +1,77 @@
+package io.github.maxziel.storagekeeper.domain;
+
+import java.time.Instant;
+import java.util.Objects;
+import java.util.Optional;
+
+/**
+ * Something the user wrote on the shopping list by hand, e.g. "Geburtstagskerzen".
+ * Unlike a {@link ShoppingListEntry}, it is not linked to a {@link PantryItem}: checking it off
+ * simply removes it, the stock does not change.
+ *
+ * <p>Invariants: name is set; the quantity is optional, but if given its amount is positive.
+ */
+public class ManualShoppingListEntry {
+
+    private final ManualShoppingListEntryId manualShoppingListEntryId;
+    private final ItemName name;
+    private final Quantity quantity;
+    private final Instant addedAt;
+
+    /**
+     * Restores an entry with a known id, e.g. when loading it from storage. Use {@link #create} for new entries.
+     */
+    public ManualShoppingListEntry(
+            ManualShoppingListEntryId manualShoppingListEntryId,
+            ItemName name,
+            Quantity quantity,
+            Instant addedAt
+    ) {
+        if (quantity != null && quantity.amount().signum() <= 0) {
+            throw new IllegalArgumentException("quantity must be positive");
+        }
+
+        this.manualShoppingListEntryId = Objects.requireNonNull(manualShoppingListEntryId, "id must not be null");
+        this.name = Objects.requireNonNull(name, "name must not be null");
+        this.quantity = quantity;
+        this.addedAt = addedAt;
+    }
+
+    /**
+     * Creates a new entry with a freshly generated id.
+     *
+     * @param quantity optional, {@code null} if the user did not say how much
+     */
+    public static ManualShoppingListEntry create(ItemName name, Quantity quantity, Instant now) {
+        return new ManualShoppingListEntry(ManualShoppingListEntryId.newId(), name, quantity, now);
+    }
+
+    public ManualShoppingListEntryId getManualShoppingListEntryId() {
+        return manualShoppingListEntryId;
+    }
+
+    public ItemName getName() {
+        return name;
+    }
+
+    public Optional<Quantity> getQuantity() {
+        return Optional.ofNullable(quantity);
+    }
+
+    public Instant getAddedAt() {
+        return addedAt;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+
+        ManualShoppingListEntry that = (ManualShoppingListEntry) o;
+        return manualShoppingListEntryId.equals(that.manualShoppingListEntryId);
+    }
+
+    @Override
+    public int hashCode() {
+        return manualShoppingListEntryId.hashCode();
+    }
+}

@@ -153,4 +153,39 @@ class PantryItemTest {
         rice.changeQuantity(BigDecimal.TEN);
         assertThat(rice.getMissingQuantity()).isEqualTo(new Quantity(BigDecimal.ZERO, Unit.KILOGRAM));
     }
+
+    @Test
+    void restockAddsThePurchasedAmount() {
+        rice.restock(new BigDecimal("1.5"));
+
+        assertThat(rice.getQuantity().amount()).isEqualByComparingTo("2.5");
+    }
+
+    @Test
+    void restockRejectsAmountsThatAreNotPositive() {
+        assertThatIllegalArgumentException().isThrownBy(() -> rice.restock(BigDecimal.ZERO));
+        assertThatIllegalArgumentException().isThrownBy(() -> rice.restock(new BigDecimal("-1")));
+    }
+
+    @Test
+    void partialRestockStaysBelowMinimumWithoutEvent() {
+        rice.changeMinimumAmount(new BigDecimal("4"));
+        rice.pullDomainEvents();
+
+        rice.restock(BigDecimal.ONE);
+
+        assertThat(rice.isBelowMinimum()).isTrue();
+        assertThat(rice.getMissingQuantity().amount()).isEqualByComparingTo("2");
+        assertThat(rice.pullDomainEvents()).isEmpty();
+    }
+
+    @Test
+    void restockToTheMinimumRaisesReachedMinimum() {
+        rice.changeMinimumAmount(new BigDecimal("4"));
+        rice.pullDomainEvents();
+
+        rice.restock(new BigDecimal("3"));
+
+        assertThat(rice.pullDomainEvents()).containsExactly(new PantryItemReachedMinimum(rice.getPantryItemId()));
+    }
 }

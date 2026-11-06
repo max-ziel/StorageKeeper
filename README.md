@@ -40,12 +40,21 @@ Das Schema legt Flyway beim Start an (`src/main/resources/db/migration`).
 
 ### Einkaufsliste – `/api/shopping-list`
 
-| Methode | Pfad                 | Body | Antwort                                                       |
-|---------|----------------------|------|---------------------------------------------------------------|
-| `GET`   | `/api/shopping-list` | –    | `200` + Liste, älteste zuerst, je Eintrag mit `missingAmount` |
+| Methode  | Pfad                                                | Body                           | Antwort                                                     |
+|----------|-----------------------------------------------------|--------------------------------|-------------------------------------------------------------|
+| `GET`    | `/api/shopping-list`                                | –                              | `200` + `{"stockPurchases": [...], "manualEntries": [...]}` |
+| `POST`   | `/api/shopping-list/stock-purchases/{id}/check-off` | `{"amount"}` (> 0)             | `200` + Artikel mit neuem Bestand                           |
+| `POST`   | `/api/shopping-list/manual-entries`                 | `{"name", "amount"?, "unit"?}` | `201` + Eintrag                                             |
+| `DELETE` | `/api/shopping-list/manual-entries/{id}`            | –                              | `204`                                                       |
 
-Die Liste pflegt sich selbst: Fällt ein Artikel unter seinen Mindestbestand, kommt er darauf,
-erreicht er ihn wieder, verschwindet er.
+Die Liste hat zwei Abschnitte, beide älteste zuerst:
+
+- **Vorratseinkäufe** (`stockPurchases`) pflegen sich selbst: Fällt ein Artikel unter seinen Mindestbestand,
+  kommt er darauf, erreicht er ihn wieder, verschwindet er. Jeder Eintrag zeigt `missingAmount`.
+  Abhaken mit der gekauften Menge erhöht den Bestand. Wurde weniger gekauft als fehlt, bleibt der Eintrag
+  mit dem Rest stehen.
+- **Einkaufsliste** (`manualEntries`) enthält, was der Nutzer selbst einträgt, z. B. „Geburtstagskerzen“.
+  Menge und Einheit sind optional, aber nur zusammen. Abhaken = löschen; der Bestand ändert sich nicht.
 
 ### Lagerorte – `/api/storage-locations`
 
@@ -57,7 +66,7 @@ erreicht er ihn wieder, verschwindet er.
 Der Basis-Lagerort „Vorrat“ existiert immer und ist in der Liste mit `"defaultLocation": true` markiert.
 
 Fehler kommen als `application/problem+json` (`400` bei ungültigen Eingaben oder unbekanntem Lagerort,
-`404` bei unbekannter Artikel-ID, `409` bei doppeltem Lagerort-Namen).
+`404` bei unbekannter Artikel- oder Eintrags-ID, `409` bei doppeltem Lagerort-Namen).
 
 ```bash
 curl localhost:8080/api/storage-locations
@@ -78,6 +87,14 @@ curl 'localhost:8080/api/pantry-items?belowMinimum=true'
 curl 'localhost:8080/api/pantry-items?storageLocationId=<id vom Keller>'
 curl 'localhost:8080/api/pantry-items/expiring?days=3'
 curl localhost:8080/api/shopping-list
+
+curl -X POST localhost:8080/api/shopping-list/stock-purchases/<eintrag-id>/check-off \
+  -H 'Content-Type: application/json' -d '{"amount":1}'
+
+curl -X POST localhost:8080/api/shopping-list/manual-entries \
+  -H 'Content-Type: application/json' -d '{"name":"Geburtstagskerzen","amount":12,"unit":"PIECE"}'
+
+curl -i -X DELETE localhost:8080/api/shopping-list/manual-entries/<eintrag-id>
 
 curl -X PATCH localhost:8080/api/pantry-items/<id>/quantity \
   -H 'Content-Type: application/json' -d '{"amount":0.5}'

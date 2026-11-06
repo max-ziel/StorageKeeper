@@ -1,6 +1,7 @@
 package io.github.maxziel.storagekeeper.adapter.in.web;
 
 import io.github.maxziel.storagekeeper.application.PantryItemNotFoundException;
+import io.github.maxziel.storagekeeper.application.ShoppingListEntryNotFoundException;
 import io.github.maxziel.storagekeeper.application.StorageLocationAlreadyExistsException;
 import io.github.maxziel.storagekeeper.application.StorageLocationNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -31,5 +32,10 @@ class ApiExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail handleInvalidArgument(IllegalArgumentException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
+    @ExceptionHandler(ShoppingListEntryNotFoundException.class)
+    ProblemDetail handleShoppingListEntryNotFound(ShoppingListEntryNotFoundException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 }
