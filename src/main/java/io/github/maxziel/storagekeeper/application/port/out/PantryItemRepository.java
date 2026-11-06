@@ -7,6 +7,7 @@ import io.github.maxziel.storagekeeper.domain.PantryItem;
 import io.github.maxziel.storagekeeper.domain.PantryItemId;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,9 @@ public interface PantryItemRepository {
     PantryItem save(PantryItem pantryItem);
 
     Optional<PantryItem> findById(PantryItemId pantryItemId);
+
+    /** Loads all items with the given ids; unknown ids are skipped. */
+    List<PantryItem> findAllById(Collection<PantryItemId> pantryItemIds);
 
     List<PantryItem> findAll();
 

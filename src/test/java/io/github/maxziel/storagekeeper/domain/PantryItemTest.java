@@ -96,4 +96,61 @@ class PantryItemTest {
     void changeMinimumAmountRejectsNegativeAmount() {
         assertThatIllegalArgumentException().isThrownBy(() -> rice.changeMinimumAmount(new BigDecimal("-1")));
     }
+
+    @Test
+    void fallingBelowMinimumRaisesEventOnce() {
+        rice.changeMinimumAmount(new BigDecimal("2"));
+        rice.changeQuantity(new BigDecimal("0.5"));
+
+        assertThat(rice.pullDomainEvents()).containsExactly(new PantryItemFellBelowMinimum(rice.getPantryItemId()));
+        assertThat(rice.pullDomainEvents()).isEmpty();
+    }
+
+    @Test
+    void reachingMinimumAgainRaisesEvent() {
+        rice.changeMinimumAmount(new BigDecimal("2"));
+        rice.pullDomainEvents();
+
+        rice.changeQuantity(new BigDecimal("2"));
+
+        assertThat(rice.pullDomainEvents()).containsExactly(new PantryItemReachedMinimum(rice.getPantryItemId()));
+    }
+
+    @Test
+    void loweringTheMinimumCanAlsoEndTheShortage() {
+        rice.changeMinimumAmount(new BigDecimal("2"));
+        rice.pullDomainEvents();
+
+        rice.changeMinimumAmount(BigDecimal.ZERO);
+
+        assertThat(rice.pullDomainEvents()).containsExactly(new PantryItemReachedMinimum(rice.getPantryItemId()));
+    }
+
+    @Test
+    void changesThatDoNotCrossTheMinimumRaiseNoEvent() {
+        rice.changeQuantity(new BigDecimal("5"));
+        rice.changeMinimumAmount(new BigDecimal("3"));
+        rice.changeQuantity(new BigDecimal("4"));
+
+        assertThat(rice.pullDomainEvents()).isEmpty();
+    }
+
+    @Test
+    void restoringAnItemBelowMinimumRaisesNoEvent() {
+        PantryItem restored = new PantryItem(PantryItemId.newId(), new ItemName("Mehl"),
+                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.DEFAULT, new BigDecimal("3"));
+
+        assertThat(restored.isBelowMinimum()).isTrue();
+        assertThat(restored.pullDomainEvents()).isEmpty();
+    }
+
+    @Test
+    void missingQuantityIsTheGapToTheMinimum() {
+        rice.changeMinimumAmount(new BigDecimal("2.5"));
+
+        assertThat(rice.getMissingQuantity()).isEqualTo(new Quantity(new BigDecimal("1.5"), Unit.KILOGRAM));
+
+        rice.changeQuantity(BigDecimal.TEN);
+        assertThat(rice.getMissingQuantity()).isEqualTo(new Quantity(BigDecimal.ZERO, Unit.KILOGRAM));
+    }
 }

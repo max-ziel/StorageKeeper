@@ -5,6 +5,7 @@ import io.github.maxziel.storagekeeper.application.port.ResultPage;
 import io.github.maxziel.storagekeeper.application.port.in.AddPantryItemCommand;
 import io.github.maxziel.storagekeeper.application.port.in.ExpiringPantryItem;
 import io.github.maxziel.storagekeeper.application.port.in.PantryItemFilter;
+import io.github.maxziel.storagekeeper.application.port.out.DomainEventPublisher;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 
 import io.github.maxziel.storagekeeper.application.port.out.StorageLocationRepository;
@@ -36,6 +37,8 @@ class PantryItemServiceTest {
 
     @Mock
     private StorageLocationRepository storageLocationRepository;
+    @Mock
+    private DomainEventPublisher eventPublisher;
 
     /** "Today" is always 26 February 2027 in these tests. */
     private final Clock clock = Clock.fixed(Instant.parse("2027-02-26T10:00:00Z"), ZoneOffset.UTC);
@@ -44,7 +47,7 @@ class PantryItemServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PantryItemService(repository, storageLocationRepository, clock);
+        service = new PantryItemService(repository, storageLocationRepository, clock, eventPublisher);
     }
 
     private final PantryItem rice = PantryItem.create(
@@ -187,5 +190,28 @@ class PantryItemServiceTest {
         when(repository.search(filter, page)).thenReturn(expected);
 
         assertThat(service.search(filter, page)).isEqualTo(expected);
+    }
+
+    @Test
+    void changeQuantityPublishesEventsOfTheItem() {
+        rice.changeMinimumAmount(new BigDecimal("0.5"));
+        rice.pullDomainEvents();
+        when(repository.findById(rice.getPantryItemId())).thenReturn(Optional.of(rice));
+        when(repository.save(rice)).thenReturn(rice);
+
+        service.changeQuantity(rice.getPantryItemId(), new BigDecimal("0.2"));
+
+        verify(eventPublisher).publish(List.of(new PantryItemFellBelowMinimum(rice.getPantryItemId())));
+    }
+
+    @Test
+    void addBelowMinimumPublishesEvent() {
+        when(storageLocationRepository.existsById(StorageLocationId.DEFAULT)).thenReturn(true);
+        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PantryItem added = service.add(new AddPantryItemCommand(
+                rice.getItemName(), rice.getQuantity(), null, null, new BigDecimal("2")));
+
+        verify(eventPublisher).publish(List.of(new PantryItemFellBelowMinimum(added.getPantryItemId())));
     }
 }

@@ -17,6 +17,8 @@ class ArchitectureTest {
             .applicationServices("..application..")
             .adapter("web", "..adapter.in.web..")
             .adapter("persistence", "..adapter.out.persistence..")
+            .adapter("events-in", "..adapter.in.event..")
+            .adapter("events-out", "..adapter.out.event..")
             .withOptionalLayers(true);
 
     @ArchTest
