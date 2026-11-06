@@ -1,7 +1,7 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M3 (Vorratsartikel mit Lagerorten, Ablauf-Abfrage, Mindestbestand sowie Filter und Paging; gespeichert in PostgreSQL).
+Stand: M4 (Einkaufsliste mit Vorratseinkäufen über Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL).
 
 ## Grundbegriffe
 
@@ -31,9 +31,12 @@ classDiagram
         -BigDecimal minimumAmount
         +create(ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId)$ PantryItem
         +changeQuantity(BigDecimal newAmount) void
+        +restock(BigDecimal purchasedAmount) void
         +changeMinimumAmount(BigDecimal newMinimumAmount) void
         +isBelowMinimum() boolean
         +getMinimumQuantity() Quantity
+        +getMissingQuantity() Quantity
+        +pullDomainEvents() List~DomainEvent~
         +getPantryItemId() PantryItemId
         +getItemName() ItemName
         +getQuantity() Quantity
@@ -94,6 +97,45 @@ classDiagram
     PantryItem --> StorageLocationId : liegt in
     StorageLocation *-- StorageLocationId
     StorageLocation *-- LocationName
+
+    class ShoppingListEntry {
+        -ShoppingListEntryId shoppingListEntryId
+        -PantryItemId pantryItemId
+        -Instant addedAt
+        +create(PantryItemId pantryItemId, Instant now)$ ShoppingListEntry
+    }
+
+    class DomainEvent
+
+    class PantryItemFellBelowMinimum {
+        +PantryItemId pantryItemId
+    }
+
+    class PantryItemReachedMinimum {
+        +PantryItemId pantryItemId
+    }
+
+    class ManualShoppingListEntry {
+        -ManualShoppingListEntryId manualShoppingListEntryId
+        -ItemName name
+        -Quantity quantity
+        -Instant addedAt
+        +create(ItemName name, Quantity quantity, Instant now)$ ManualShoppingListEntry
+        +getQuantity() Optional~Quantity~
+    }
+
+    class ManualShoppingListEntryId {
+        +UUID value
+        +newId()$ ManualShoppingListEntryId
+    }
+
+    ShoppingListEntry --> PantryItemId : für
+    ManualShoppingListEntry *-- ManualShoppingListEntryId
+    ManualShoppingListEntry *-- ItemName
+    ManualShoppingListEntry *-- Quantity : optional
+    PantryItemFellBelowMinimum ..|> DomainEvent
+    PantryItemReachedMinimum ..|> DomainEvent
+    PantryItem ..> DomainEvent : erzeugt
 ```
 
 ## Klassen im Detail
@@ -115,6 +157,8 @@ Ein Produkt im Vorrat, z. B. „1 kg Reis, haltbar bis 01.03.2027“.
   Wiederherstellen eines vorhandenen Artikels mit bekannter ID gedacht (z. B. später aus der Datenbank).
 - **Ändern:** `changeQuantity(newAmount)` setzt eine neue Menge; die Einheit bleibt gleich.
   Eine negative Menge wird von `Quantity` abgelehnt.
+- **Auffüllen:** `restock(purchasedAmount)` addiert eine gekaufte Menge zum Bestand (muss > 0 sein).
+  Intern ruft es `changeQuantity` auf und löst deshalb dieselben Events aus.
 - **Gleichheit:** nur über `pantryItemId`. Ein Artikel bleibt derselbe, auch wenn sich seine Menge ändert.
 - **Ablauf:** `daysUntilExpiry(today)` liefert die Tage bis zum Ablaufdatum: `0` = läuft heute ab,
   negativ = schon abgelaufen. Das „heute“ wird übergeben, die Domain fragt nie selbst die Uhr
@@ -192,6 +236,164 @@ Zusätzlich gibt es die Konstante `DEFAULT` für den Basis-Lagerort.
 | Feld    | Typ      | Regel                                                                                                     |
 |---------|----------|-----------------------------------------------------------------------------------------------------------|
 | `value` | `String` | nicht `null`, nicht leer; wird mit `strip()` von Leerzeichen befreit; höchstens `MAX_LENGTH` = 50 Zeichen |
+
+### `ShoppingListEntry` – Entity, eigenes Aggregat
+
+Ein Artikel, der gekauft werden soll. Es gibt höchstens einen Eintrag pro Artikel.
+
+| Feld                  | Typ                   | Pflicht | Regel                                      |
+|-----------------------|-----------------------|---------|--------------------------------------------|
+| `shoppingListEntryId` | `ShoppingListEntryId` | ja      | unveränderlich                             |
+| `pantryItemId`        | `PantryItemId`        | ja      | Verweis auf den Artikel nur über die ID    |
+| `addedAt`             | `Instant`             | ja      | Zeitpunkt, an dem der Eintrag entstand     |
+
+Wie viel gekauft werden muss, steht nicht im Eintrag, sondern wird beim Anzeigen aus dem Artikel berechnet
+(`PantryItem.getMissingQuantity()` = Mindestbestand − Menge). So passt die Zahl immer zum aktuellen Bestand.
+
+### `ManualShoppingListEntry` – Entity, eigenes Aggregat
+
+Etwas, das der Nutzer selbst auf die Liste schreibt, z. B. „Geburtstagskerzen“. Es hängt an keinem Artikel.
+
+| Feld                        | Typ                         | Pflicht | Regel                                             |
+|-----------------------------|-----------------------------|---------|---------------------------------------------------|
+| `manualShoppingListEntryId` | `ManualShoppingListEntryId` | ja      | unveränderlich                                    |
+| `name`                      | `ItemName`                  | ja      | dieselben Regeln wie beim Artikelnamen            |
+| `quantity`                  | `Quantity`                  | nein    | `null` = ohne Mengenangabe; wenn gesetzt, > 0     |
+| `addedAt`                   | `Instant`                   | ja      | Zeitpunkt, an dem der Eintrag entstand            |
+
+**Warum eine eigene Klasse statt `ShoppingListEntry` mit optionalem Artikel?** Die beiden verhalten sich
+verschieden: Ein Vorratseinkauf entsteht und verschwindet automatisch und ändert beim Abhaken den Bestand,
+ein manueller Eintrag wird vom Nutzer angelegt und beim Abhaken einfach gelöscht. Mit einer Klasse bräuchte
+jede Methode eine Fallunterscheidung „mit oder ohne Artikel“.
+
+### `ManualShoppingListEntryId` – Value Object
+
+Wie `PantryItemId`: kapselt eine `UUID`, `newId()` erzeugt eine zufällige ID.
+
+### Domain-Events
+
+Ein Domain-Event beschreibt, dass in der Domain etwas passiert ist, auf das andere Teile reagieren können.
+Events sind einfache `record`s ohne Framework-Typen und implementieren das Marker-Interface `DomainEvent`.
+
+| Event                        | Wann                                                                      |
+|------------------------------|---------------------------------------------------------------------------|
+| `PantryItemFellBelowMinimum` | Menge ist nach einer Änderung **unter** dem Mindestbestand, vorher nicht  |
+| `PantryItemReachedMinimum`   | Menge ist nach einer Änderung **nicht mehr** darunter, vorher schon       |
+
+- Ausgelöst werden sie nur beim **Überschreiten der Grenze**, nicht bei jeder Änderung:
+  von 5 auf 4 bei Mindestbestand 3 passiert nichts.
+- Beide Richtungen gibt es über `changeQuantity` und über `changeMinimumAmount`
+  (ein höherer Mindestbestand kann einen Artikel genauso „unter Minimum“ bringen wie ein Verbrauch).
+- `PantryItem` sammelt die Events intern; `pullDomainEvents()` gibt sie heraus und leert die Liste,
+  damit jedes Event nur einmal verarbeitet wird.
+- Das Wiederherstellen eines Artikels aus der Datenbank (Konstruktor) ist keine Änderung und erzeugt kein Event.
+
+## Einkaufsliste
+
+`GET /api/shopping-list` liefert die Liste in zwei Abschnitten, jeweils älteste zuerst:
+
+| Abschnitt         | JSON-Feld        | Inhalt                                   | Entsteht            | Abhaken                                   |
+|-------------------|------------------|------------------------------------------|---------------------|-------------------------------------------|
+| Vorratseinkäufe   | `stockPurchases` | `ShoppingListEntry` + Artikel            | automatisch         | gekaufte Menge wird zum Bestand addiert   |
+| Einkaufsliste     | `manualEntries`  | `ManualShoppingListEntry`                | vom Nutzer          | Eintrag wird gelöscht                     |
+
+In der Application fasst `ShoppingList(stockPurchases, manualEntries)` beide Abschnitte zusammen
+(`ListShoppingListUseCase.getShoppingList()`).
+
+### Vorratseinkäufe entstehen automatisch
+
+Fällt ein Artikel unter seinen Mindestbestand, kommt er auf die Liste; erreicht er ihn wieder, verschwindet er.
+Jeder Eintrag zeigt `missingAmount`.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant W as PantryItemController
+    participant S as PantryItemService
+    participant P as PantryItem
+    participant E as SpringDomainEventPublisher
+    participant L as ShoppingListEventListener
+    participant SL as ShoppingListService
+
+    C->>W: PATCH /api/pantry-items/{id}/quantity {"amount": 0.5}
+    W->>S: changeQuantity(id, 0.5)
+    Note over S,SL: alles in einer Transaktion
+    S->>P: changeQuantity(0.5)
+    P->>P: unter Minimum? → PantryItemFellBelowMinimum merken
+    S->>S: Artikel speichern
+    S->>E: publish(item.pullDomainEvents())
+    E->>L: Spring-Event
+    L->>SL: addItem(pantryItemId)
+    SL->>SL: Eintrag anlegen, falls noch keiner existiert
+    S-->>W: PantryItem
+    W-->>C: 200
+```
+
+**Warum Events statt eines direkten Aufrufs?** `PantryItemService` müsste sonst die Einkaufsliste kennen und
+bei jeder Mengenänderung selbst entscheiden, ob dort etwas zu tun ist. Mit Events meldet der Artikel nur
+„ich bin unter Minimum“, und wer sich dafür interessiert, reagiert. In M5/M6 können weitere Reaktionen
+(z. B. eine Benachrichtigung) dazukommen, ohne den bestehenden Code anzufassen.
+
+**Wie die Teile zusammenhängen:**
+
+- `DomainEventPublisher` ist ein Port in `application.port.out`. Die Application kennt nur dieses Interface.
+- `adapter.out.event.SpringDomainEventPublisher` implementiert ihn mit Springs `ApplicationEventPublisher`.
+- `adapter.in.event.ShoppingListEventListener` empfängt die Events (`@EventListener`) und ruft den Use Case
+  `UpdateShoppingListUseCase` auf. Er ist ein **treibender Adapter**, genau wie ein REST-Controller:
+  Er übersetzt nur und enthält keine Regeln.
+- `ShoppingListService` legt Einträge an (nur, wenn noch keiner existiert) und entfernt sie.
+
+**Transaktionen:** `PantryItemService.add`, `changeQuantity` und `changeMinimumAmount` sind `@Transactional`.
+Spring ruft die Listener synchron im selben Thread auf, deshalb laufen Änderung am Artikel und Änderung an der
+Einkaufsliste in **einer** Transaktion: Schlägt das Anlegen des Eintrags fehl, wird auch die Mengenänderung
+zurückgerollt. Artikel und Liste können so nicht auseinanderlaufen.
+
+**Löschen:** Wird ein Artikel gelöscht, löscht die Datenbank seinen Eintrag mit (`ON DELETE CASCADE`).
+
+### Vorratseinkauf abhaken
+
+`POST /api/shopping-list/stock-purchases/{id}/check-off` mit `{"amount": 1}` meldet, wie viel gekauft wurde.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant W as ShoppingListController
+    participant SL as ShoppingListService
+    participant S as PantryItemService
+    participant P as PantryItem
+    participant L as ShoppingListEventListener
+
+    C->>W: POST /stock-purchases/{id}/check-off {"amount": 1}
+    W->>SL: checkOff(entryId, 1)
+    Note over SL,L: alles in einer Transaktion
+    SL->>SL: Eintrag laden (sonst 404)
+    SL->>S: restock(pantryItemId, 1)
+    S->>P: restock(1)
+    P->>P: Minimum erreicht? → PantryItemReachedMinimum merken
+    S->>S: speichern, Events veröffentlichen
+    S-->>L: PantryItemReachedMinimum (nur wenn erreicht)
+    L->>SL: removeItem(pantryItemId)
+    S-->>SL: PantryItem
+    SL-->>W: PantryItem
+    W-->>C: 200 PantryItemResponse
+```
+
+- **Teilkauf:** Fehlen 3 kg und es wird 1 kg gekauft, steigt der Bestand um 1 kg. Der Artikel ist weiter unter
+  dem Minimum, es gibt kein Event, und der Eintrag bleibt mit `missingAmount` 2 stehen.
+- **Vollständig gekauft:** Erreicht der Bestand das Minimum, löst `PantryItem` `PantryItemReachedMinimum` aus,
+  und der Listener entfernt den Eintrag. Mehr als fehlt zu kaufen ist erlaubt.
+- `ShoppingListService.checkOff` entfernt den Eintrag **nicht** selbst. Ob der Artikel genug hat, entscheidet
+  allein `PantryItem`; so gibt es diese Regel nur an einer Stelle.
+- Den Bestand ändert `ShoppingListService` nicht direkt, sondern über den Use Case `RestockPantryItemUseCase`
+  (implementiert von `PantryItemService`). Laden, Speichern und Events veröffentlichen bleiben damit an einer Stelle.
+
+### Manuelle Einträge
+
+- `POST /api/shopping-list/manual-entries` mit `{"name", "amount"?, "unit"?}` legt einen Eintrag an (`201`).
+  Menge und Einheit sind optional, aber nur zusammen; sonst `400`. Die Menge muss > 0 sein.
+- `DELETE /api/shopping-list/manual-entries/{id}` hakt ihn ab, also löscht ihn (`204`, unbekannt → `404`).
+- Manuelle Einträge haben keinen Bezug zum Vorrat. Wer etwas Gekauftes in den Vorrat übernehmen will,
+  legt dafür einen Artikel an.
 
 ## Ablaufdatum und aktuelle Zeit
 
@@ -348,6 +550,13 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Artikel-ID unbekannt (`PantryItemNotFoundException`)                    | 404         |
 | Lagerort im Request unbekannt (`StorageLocationNotFoundException`)      | 400         |
 | Lagerort-Name existiert schon (`StorageLocationAlreadyExistsException`) | 409         |
+| Einkaufslisten-Eintrag unbekannt (`ShoppingListEntryNotFoundException`) | 404         |
+
+`ShoppingListEntryResponse` (für `/api/shopping-list`) enthält `id` (Eintrag), `pantryItemId`, `name`, `unit`,
+`amount`, `minimumAmount`, `storageLocationId` und `addedAt` sowie `missingAmount` aus `getMissingQuantity()`.
+Die Antwort von `GET /api/shopping-list` ist ein `ShoppingListResponse` mit `stockPurchases`
+(Liste von `ShoppingListEntryResponse`) und `manualEntries` (Liste von `ManualShoppingListEntryResponse`
+mit `id`, `name`, `amount`, `unit`, `addedAt`; `amount` und `unit` sind `null`, wenn keine Menge angegeben wurde).
 
 
 ## Persistenz
@@ -404,6 +613,31 @@ gespeichert sind. Am Schema selbst ändert sich nichts.
 `V4__add_minimum_amount.sql` ergänzt `pantry_item.minimum_amount` (Pflicht, Standard `0`, nicht negativ).
 Vorhandene Artikel bekommen dadurch „kein Mindestbestand“. Außerdem kommt ein Index auf
 `storage_location_id` dazu, der das Filtern nach Lagerort beschleunigt.
+
+### Tabelle `shopping_list_entry` (Migration V5)
+
+| Spalte           | Typ                        | Null? | Herkunft im Domain-Modell                                         |
+|------------------|----------------------------|-------|-------------------------------------------------------------------|
+| `id`             | `UUID`                     | nein  | `ShoppingListEntryId.value` (Primärschlüssel)                     |
+| `pantry_item_id` | `UUID`                     | nein  | `pantryItemId`; `UNIQUE`, Fremdschlüssel mit `ON DELETE CASCADE`  |
+| `added_at`       | `TIMESTAMP WITH TIME ZONE` | nein  | `addedAt`                                                         |
+
+`UNIQUE` auf `pantry_item_id` sichert „höchstens ein Eintrag pro Artikel“ auch in der Datenbank ab.
+V5 legt außerdem für alle Artikel, die beim Migrieren schon unter ihrem Mindestbestand liegen, einen Eintrag an.
+Ohne das würden sie erst auf der Liste erscheinen, nachdem sie einmal über und wieder unter das Minimum gegangen sind.
+
+### Tabelle `manual_shopping_list_entry` (Migration V6)
+
+| Spalte     | Typ                        | Null? | Herkunft im Domain-Modell                                 |
+|------------|----------------------------|-------|-----------------------------------------------------------|
+| `id`       | `UUID`                     | nein  | `ManualShoppingListEntryId.value` (Primärschlüssel)       |
+| `name`     | `VARCHAR(100)`             | nein  | `ItemName.value`                                          |
+| `amount`   | `NUMERIC`                  | ja    | `Quantity.amount`; `CHECK (amount > 0)`                   |
+| `unit`     | `VARCHAR(20)`              | ja    | `Quantity.unit`                                           |
+| `added_at` | `TIMESTAMP WITH TIME ZONE` | nein  | `addedAt`                                                 |
+
+Ein `CHECK ((amount IS NULL) = (unit IS NULL))` stellt sicher, dass Menge und Einheit nur zusammen gesetzt sind.
+Einen Fremdschlüssel gibt es nicht, weil manuelle Einträge an keinem Artikel hängen.
 
 ### Domain-Klasse und JPA-Entity sind getrennt
 

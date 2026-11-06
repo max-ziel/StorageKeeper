@@ -3,6 +3,8 @@ package io.github.maxziel.storagekeeper.domain;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -20,6 +22,8 @@ public class PantryItem {
     private final LocalDate expiryDate;
     private final StorageLocationId storageLocationId;
     private BigDecimal minimumAmount;
+    /** Events raised by changes since the item was loaded; collected by {@link #pullDomainEvents()}. */
+    private final List<DomainEvent> domainEvents = new ArrayList<>();
 
     public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId) {
         this(pantryItemId, itemName, quantity, expiryDate, storageLocationId, BigDecimal.ZERO);
@@ -37,7 +41,8 @@ public class PantryItem {
         this.quantity = Objects.requireNonNull(quantity, "quantity must not be null");
         this.expiryDate = expiryDate;
         this.storageLocationId = Objects.requireNonNull(storageLocationId, "storage location must not be null");
-        changeMinimumAmount(minimumAmount);
+        // Set directly instead of via changeMinimumAmount(): restoring an item is not a change and raises no event.
+        this.minimumAmount = quantity.withAmount(minimumAmount).amount();
     }
 
     /** Creates a new item with a freshly generated id. */
@@ -51,8 +56,10 @@ public class PantryItem {
      * @throws IllegalArgumentException if the amount is negative
      */
     public void changeMinimumAmount(BigDecimal newMinimumAmount) {
+        boolean wasBelowMinimum = isBelowMinimum();
         // Quantity checks "not null, not negative"
         this.minimumAmount = quantity.withAmount(newMinimumAmount).amount();
+        recordMinimumTransition(wasBelowMinimum);
     }
 
     /**
@@ -65,8 +72,53 @@ public class PantryItem {
 
     /** Sets a new amount; the unit stays the same. */
     public void changeQuantity(BigDecimal newAmount) {
+        boolean wasBelowMinimum = isBelowMinimum();
         this.quantity = this.quantity.withAmount(newAmount);
+        recordMinimumTransition(wasBelowMinimum);
     }
+
+    /**
+     * Adds a purchased amount to the stock, e.g. after shopping. Raises the same events as
+     * {@link #changeQuantity(BigDecimal)}.
+     *
+     * @throws IllegalArgumentException if the amount is not positive
+     */
+    public void restock(BigDecimal purchasedAmount) {
+        Objects.requireNonNull(purchasedAmount, "purchased amount must not be null");
+        if (purchasedAmount.signum() <= 0) {
+            throw new IllegalArgumentException("purchased amount must be positive");
+        }
+
+        changeQuantity(quantity.amount().add(purchasedAmount));
+    }
+
+    /**
+     * How much is missing to reach the minimum stock, in the item's unit; zero if the item is not below its minimum.
+     */
+    public Quantity getMissingQuantity() {
+        BigDecimal missing = minimumAmount.subtract(quantity.amount());
+        return quantity.withAmount(missing.signum() > 0 ? missing : BigDecimal.ZERO);
+    }
+
+    /**
+     * Returns the events raised since the last call and forgets them, so each event is handed out only once.
+     */
+    public List<DomainEvent> pullDomainEvents() {
+        List<DomainEvent> events = List.copyOf(domainEvents);
+        domainEvents.clear();
+        return events;
+    }
+
+    /** Raises an event only when the item crosses its minimum stock, not on every change. */
+    private void recordMinimumTransition(boolean wasBelowMinimum) {
+        boolean isBelowMinimum = isBelowMinimum();
+        if (!wasBelowMinimum && isBelowMinimum) {
+            domainEvents.add(new PantryItemFellBelowMinimum(pantryItemId));
+        } else if (wasBelowMinimum && !isBelowMinimum) {
+            domainEvents.add(new PantryItemReachedMinimum(pantryItemId));
+        }
+    }
+
 
     public PantryItemId getPantryItemId() {
         return pantryItemId;

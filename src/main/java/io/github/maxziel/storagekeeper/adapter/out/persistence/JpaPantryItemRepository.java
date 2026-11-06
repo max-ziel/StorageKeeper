@@ -14,6 +14,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -93,5 +94,12 @@ class JpaPantryItemRepository implements PantryItemRepository {
                 page.size(),
                 result.getTotalElements()
         );
+    }
+
+    @Override
+    public List<PantryItem> findAllById(Collection<PantryItemId> pantryItemIds) {
+        return jpaRepository.findAllById(pantryItemIds.stream().map(PantryItemId::value).toList()).stream()
+                .map(PantryItemJpaEntity::toDomain)
+                .toList();
     }
 }

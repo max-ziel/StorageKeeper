@@ -6,3 +6,4 @@ build/
 /out/
 .vscode/
 .DS_Store
+graphify-out/
