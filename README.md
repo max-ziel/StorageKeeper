@@ -38,6 +38,15 @@ Das Schema legt Flyway beim Start an (`src/main/resources/db/migration`).
   `belowMinimum=true` zeigt nur Artikel, deren Menge unter dem Mindestbestand liegt.
 - `/expiring` liefert alles, was in den nächsten `days` Tagen abläuft oder schon abgelaufen ist (`daysUntilExpiry` negativ).
 
+### Einkaufsliste – `/api/shopping-list`
+
+| Methode | Pfad                 | Body | Antwort                                                       |
+|---------|----------------------|------|---------------------------------------------------------------|
+| `GET`   | `/api/shopping-list` | –    | `200` + Liste, älteste zuerst, je Eintrag mit `missingAmount` |
+
+Die Liste pflegt sich selbst: Fällt ein Artikel unter seinen Mindestbestand, kommt er darauf,
+erreicht er ihn wieder, verschwindet er.
+
 ### Lagerorte – `/api/storage-locations`
 
 | Methode | Pfad                     | Body       | Antwort                                         |
@@ -68,6 +77,7 @@ curl 'localhost:8080/api/pantry-items?size=10'
 curl 'localhost:8080/api/pantry-items?belowMinimum=true'
 curl 'localhost:8080/api/pantry-items?storageLocationId=<id vom Keller>'
 curl 'localhost:8080/api/pantry-items/expiring?days=3'
+curl localhost:8080/api/shopping-list
 
 curl -X PATCH localhost:8080/api/pantry-items/<id>/quantity \
   -H 'Content-Type: application/json' -d '{"amount":0.5}'

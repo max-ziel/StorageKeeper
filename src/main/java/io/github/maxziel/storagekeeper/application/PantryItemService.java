@@ -3,12 +3,14 @@ package io.github.maxziel.storagekeeper.application;
 import io.github.maxziel.storagekeeper.application.port.PageQuery;
 import io.github.maxziel.storagekeeper.application.port.ResultPage;
 import io.github.maxziel.storagekeeper.application.port.in.*;
+import io.github.maxziel.storagekeeper.application.port.out.DomainEventPublisher;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 import io.github.maxziel.storagekeeper.application.port.out.StorageLocationRepository;
 import io.github.maxziel.storagekeeper.domain.PantryItem;
 import io.github.maxziel.storagekeeper.domain.PantryItemId;
 import io.github.maxziel.storagekeeper.domain.StorageLocationId;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -28,13 +30,19 @@ public class PantryItemService implements
     private final PantryItemRepository repository;
     private final StorageLocationRepository storageLocationRepository;
     private final Clock clock;
+    private final DomainEventPublisher eventPublisher;
 
-    public PantryItemService(PantryItemRepository repository, StorageLocationRepository storageLocationRepository,
-                             Clock clock) {
+    public PantryItemService(
+            PantryItemRepository repository,
+            StorageLocationRepository storageLocationRepository,
+            Clock clock,
+            DomainEventPublisher eventPublisher
+    ) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
         this.storageLocationRepository =
                 Objects.requireNonNull(storageLocationRepository, "storageLocationRepository must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
     }
 
     /**
@@ -44,6 +52,7 @@ public class PantryItemService implements
      * @throws StorageLocationNotFoundException if the given location does not exist
      */
     @Override
+    @Transactional
     public PantryItem add(AddPantryItemCommand command) {
         StorageLocationId locationId = Objects.requireNonNullElse(command.storageLocationId(), StorageLocationId.DEFAULT);
         if (!storageLocationRepository.existsById(locationId)) {
@@ -53,7 +62,7 @@ public class PantryItemService implements
         if (command.minimumAmount() != null) {
             item.changeMinimumAmount(command.minimumAmount());
         }
-        return repository.save(item);
+        return saveAndPublishEvents(item);
     }
 
     @Override
@@ -73,17 +82,19 @@ public class PantryItemService implements
     }
 
     @Override
+    @Transactional
     public PantryItem changeQuantity(PantryItemId id, BigDecimal newAmount) {
         PantryItem item = load(id);
         item.changeQuantity(newAmount);
-        return repository.save(item);
+        return saveAndPublishEvents(item);
     }
 
     @Override
+    @Transactional
     public PantryItem changeMinimumAmount(PantryItemId id, BigDecimal newMinimumAmount) {
         PantryItem item = load(id);
         item.changeMinimumAmount(newMinimumAmount);
-        return repository.save(item);
+        return saveAndPublishEvents(item);
     }
 
     @Override
@@ -95,5 +106,15 @@ public class PantryItemService implements
 
     private PantryItem load(PantryItemId id) {
         return repository.findById(id).orElseThrow(() -> new PantryItemNotFoundException(id));
+    }
+
+    /**
+     * Saves the item first and then publishes its events. Both happen in the caller's transaction:
+     * if a listener fails, the change to the item is rolled back as well.
+     */
+    private PantryItem saveAndPublishEvents(PantryItem item) {
+        PantryItem saved = repository.save(item);
+        eventPublisher.publish(item.pullDomainEvents());
+        return saved;
     }
 }
