@@ -5,6 +5,7 @@ import io.github.maxziel.storagekeeper.application.port.in.*;
 import io.github.maxziel.storagekeeper.domain.PantryItem;
 import io.github.maxziel.storagekeeper.domain.PantryItemId;
 import io.github.maxziel.storagekeeper.domain.StorageLocationId;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -20,6 +21,7 @@ import java.util.UUID;
  * and domain objects into JSON responses; contains no business logic itself.
  */
 @RestController
+@Tag(name = "Vorratsartikel", description = "Artikel im Vorrat anlegen, suchen, ändern und entfernen")
 @RequestMapping("/api/pantry-items")
 class PantryItemController {
 

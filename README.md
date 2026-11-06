@@ -12,12 +12,37 @@ Voraussetzungen: JDK 25 und ein laufendes Docker (für PostgreSQL).
 
 ```bash
 ./gradlew build      # kompiliert, testet (inkl. Architekturregeln und Tests gegen PostgreSQL per Testcontainers)
-./gradlew bootRun    # startet PostgreSQL per Docker Compose (compose.yaml) und die App auf http://localhost:8080
+./gradlew bootRun    # startet PostgreSQL und Keycloak per Docker Compose (compose.yaml) und die App auf http://localhost:8080
 curl localhost:8080/actuator/health
 ```
 
-`bootRun` startet den Datenbank-Container automatisch und stoppt ihn beim Beenden wieder; die Daten bleiben erhalten.
+`bootRun` startet die Container automatisch und stoppt sie beim Beenden wieder; die Daten in PostgreSQL bleiben erhalten.
 Das Schema legt Flyway beim Start an (`src/main/resources/db/migration`).
+
+## Anmeldung
+
+Die API ist ein OAuth2 Resource Server: Jeder Aufruf unter `/api/**` braucht ein JWT im Header
+`Authorization: Bearer <token>`, sonst kommt `401`. Öffentlich sind nur `/actuator/health`, `/actuator/info`
+und die API-Dokumentation.
+
+Für die lokale Entwicklung läuft Keycloak auf http://localhost:8180 (Admin-Konsole: `admin` / `admin`) mit dem Realm
+`storagekeeper` aus `dev/keycloak/storagekeeper-realm.json`. Darin gibt es die Testnutzer `alice` / `alice` und
+`bob` / `bob`. Ein Token (1 Stunde gültig) holt man so:
+
+```bash
+TOKEN=$(curl -s localhost:8180/realms/storagekeeper/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=storagekeeper-cli -d username=alice -d password=alice | jq -r .access_token)
+```
+
+Die App akzeptiert nur Tokens, die vom eingestellten Issuer stammen und für diese API ausgestellt sind
+(`aud` enthält `storagekeeper-api`). Einen anderen Issuer setzt man mit der Umgebungsvariable `STORAGEKEEPER_ISSUER_URI`.
+
+## API-Dokumentation
+
+- Swagger UI: http://localhost:8080/swagger-ui.html – über „Authorize“ das Token (ohne `Bearer `) eintragen.
+- OpenAPI-Dokument (JSON): http://localhost:8080/v3/api-docs
+
+Die Dokumentation wird von springdoc aus den Controllern erzeugt und ist daher immer auf dem Stand des Codes.
 
 ## REST-API
 
@@ -67,6 +92,13 @@ Der Basis-Lagerort „Vorrat“ existiert immer und ist in der Liste mit `"defau
 
 Fehler kommen als `application/problem+json` (`400` bei ungültigen Eingaben oder unbekanntem Lagerort,
 `404` bei unbekannter Artikel- oder Eintrags-ID, `409` bei doppeltem Lagerort-Namen).
+Ein fehlendes oder ungültiges Token ergibt `401`, ebenfalls als `problem+json`; der Header `WWW-Authenticate` nennt zusätzlich den Grund.
+
+Alle Beispiele brauchen das Token aus „Anmeldung“. Damit es nicht jedes Mal angegeben werden muss:
+
+```bash
+alias curl='curl -H "Authorization: Bearer $TOKEN"'
+```
 
 ```bash
 curl localhost:8080/api/storage-locations

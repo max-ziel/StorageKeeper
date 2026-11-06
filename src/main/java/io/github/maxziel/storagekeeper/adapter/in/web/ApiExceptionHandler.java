@@ -6,6 +6,8 @@ import io.github.maxziel.storagekeeper.application.StorageLocationAlreadyExistsE
 import io.github.maxziel.storagekeeper.application.StorageLocationNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -37,5 +39,14 @@ class ApiExceptionHandler {
     @ExceptionHandler(ShoppingListEntryNotFoundException.class)
     ProblemDetail handleShoppingListEntryNotFound(ShoppingListEntryNotFoundException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    ProblemDetail handleUnAuthenticated(AuthenticationException exception) {
+        String detail = exception instanceof
+                OAuth2AuthenticationException oauth2Exception && oauth2Exception.getError().getDescription() != null ?
+                oauth2Exception.getError().getDescription() : "A valid bearer token is required.";
+
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, detail);
     }
 }

@@ -1,7 +1,8 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M4 (Einkaufsliste mit Vorratseinkäufen über Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL).
+Stand: M5, Teil 1 (Einkaufsliste mit Vorratseinkäufen über Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL;
+API nur mit JWT erreichbar).
 
 ## Grundbegriffe
 
@@ -453,6 +454,61 @@ mit `WHERE`, `ORDER BY name, id`, `LIMIT` und `OFFSET` plus eine `COUNT`-Abfrage
 Sortiert wird zusätzlich nach `id`, damit Artikel mit gleichem Namen auf jeder Seite in derselben Reihenfolge
 stehen und keiner auf zwei Seiten auftaucht.
 
+## Anmeldung (Authentifizierung)
+
+Die REST-API ist ein **OAuth2 Resource Server**: Sie stellt selbst keine Tokens aus und verwaltet keine Passwörter,
+sondern prüft nur die JWTs, die ein Identity Provider ausgestellt hat (lokal: Keycloak aus `compose.yaml`).
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant K as Keycloak
+    participant F as Spring Security (Filter)
+    participant W as Controller
+
+    C->>K: Benutzername + Passwort
+    K-->>C: JWT (signiert, 1 h gültig)
+    C->>F: GET /api/... mit Authorization: Bearer JWT
+    F->>K: öffentliche Schlüssel holen (nur beim ersten Mal, dann gecacht)
+    F->>F: Signatur, Ablauf, Issuer und Audience prüfen
+    alt Token gültig
+        F->>W: Request weiterreichen
+        W-->>C: 200
+    else fehlt oder ungültig
+        F-->>C: 401 + WWW-Authenticate + ProblemDetail
+    end
+```
+
+- **Was geprüft wird:** Signatur (mit den Schlüsseln des Issuers), Ablaufzeit, Issuer (`iss` muss
+  `spring.security.oauth2.resourceserver.jwt.issuer-uri` sein) und Audience (`aud` muss `storagekeeper-api`
+  enthalten). Die Audience-Prüfung verhindert, dass ein Token, das derselbe Keycloak für eine ganz andere
+  Anwendung ausgestellt hat, auch hier funktioniert.
+- **Öffentlich** sind nur `/actuator/health`, `/actuator/info`, `/v3/api-docs` und die Swagger UI; alles andere
+  verlangt ein Token.
+- **Ohne Sitzung:** Jeder Request bringt sein Token mit; der Server merkt sich nichts (`STATELESS`). Weil es
+  dadurch auch kein Sitzungs-Cookie gibt, ist CSRF-Schutz unnötig und abgeschaltet.
+- **Wo:** `adapter.in.web.SecurityConfiguration`. Anmeldung gehört zum Web-Adapter; Domain und Application
+  wissen davon nichts.
+- **Antwort bei `401`:** Der Standard-Entry-Point von Spring Security setzt Status und Header `WWW-Authenticate`
+  (RFC 6750, z. B. `error="invalid_token"`), schreibt aber keinen Body. Damit `401` wie jeder andere Fehler als
+  `ProblemDetail` kommt, ruft der Entry-Point in `SecurityConfiguration` danach Springs `HandlerExceptionResolver`
+  auf; der leitet die `AuthenticationException` an `ApiExceptionHandler` weiter. Der Umweg ist nötig, weil der
+  Security-Filter vor Spring MVC läuft und `@RestControllerAdvice` die Exception sonst nie zu sehen bekäme.
+  `detail` ist bei fehlendem Token „A valid bearer token is required.“, bei ungültigem Token der Grund
+  (z. B. abgelaufen).
+
+In diesem Teil gilt noch: Wer angemeldet ist, sieht alles. Haushalte und die Prüfung, wer welchen Vorrat sehen darf,
+folgen in M5, Teil 2; diese Prüfung liegt dann im Application-Layer, nicht im Filter.
+
+**In Tests** braucht es keinen Keycloak: Die Controller-Tests laufen mit `@WithMockUser` als angemeldeter Nutzer,
+`ApiSecurityTest` prüft die Regeln mit der echten Filterkette und setzt per `jwt()` ein bereits geprüftes Token ein.
+
+## API-Dokumentation
+
+springdoc erzeugt aus den Controllern ein OpenAPI-3-Dokument (`/v3/api-docs`) und die Swagger UI (`/swagger-ui.html`).
+`adapter.in.web.OpenApiConfiguration` ergänzt nur Titel und Beschreibung und meldet das Bearer-Schema an,
+damit die Swagger UI einen „Authorize“-Knopf zeigt. Die Gruppen in der Swagger UI kommen aus `@Tag` an den Controllern.
+
 ## Schichten und Abhängigkeiten
 
 ```mermaid
@@ -551,6 +607,7 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Lagerort im Request unbekannt (`StorageLocationNotFoundException`)      | 400         |
 | Lagerort-Name existiert schon (`StorageLocationAlreadyExistsException`) | 409         |
 | Einkaufslisten-Eintrag unbekannt (`ShoppingListEntryNotFoundException`) | 404         |
+| Kein oder ungültiges Token (`AuthenticationException`)                  | 401         |
 
 `ShoppingListEntryResponse` (für `/api/shopping-list`) enthält `id` (Eintrag), `pantryItemId`, `name`, `unit`,
 `amount`, `minimumAmount`, `storageLocationId` und `addedAt` sowie `missingAmount` aus `getMissingQuantity()`.

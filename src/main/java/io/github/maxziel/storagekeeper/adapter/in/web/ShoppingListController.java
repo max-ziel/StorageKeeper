@@ -7,6 +7,7 @@ import io.github.maxziel.storagekeeper.application.port.in.RemoveManualShoppingL
 import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntry;
 import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntryId;
 import io.github.maxziel.storagekeeper.domain.ShoppingListEntryId;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,6 +26,7 @@ import java.util.UUID;
  * stock and can only be checked off; manual entries are written and removed by the user.
  */
 @RestController
+@Tag(name = "Einkaufsliste", description = "Vorratseinkäufe abhaken und manuelle Einträge pflegen")
 @RequestMapping("/api/shopping-list")
 class ShoppingListController {
 

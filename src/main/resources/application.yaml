@@ -8,12 +8,22 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # The default is the Keycloak from compose.yaml for local development.
+          issuer-uri: ${STORAGEKEEPER_ISSUER_URI:http://localhost:8180/realms/storagekeeper}
+          # The token must be meant for this API ("aud" claim), not just for any client of the issuer.
+          audiences: storagekeeper-api
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+
 
 storagekeeper:
   # Time zone that decides when a day starts, e.g., for "expires today".
