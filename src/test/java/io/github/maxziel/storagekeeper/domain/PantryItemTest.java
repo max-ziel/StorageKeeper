@@ -9,25 +9,41 @@ import static org.assertj.core.api.Assertions.*;
 
 class PantryItemTest {
 
-    private final PantryItem rice = PantryItem.create(
+    private static final HouseholdId HOUSEHOLD = HouseholdId.newId();
+    private static final StorageLocationId LOCATION = StorageLocationId.newId();
+
+    private final PantryItem rice = PantryItem.create(HOUSEHOLD,
             new ItemName("Reis"),
             new Quantity(BigDecimal.ONE, Unit.KILOGRAM),
             LocalDate.of(2027, 3, 1),
-            StorageLocationId.DEFAULT
+            LOCATION
     );
 
     @Test
     void createAssignsNewIds() {
-        PantryItem other = PantryItem.create(rice.getItemName(), rice.getQuantity(), null, StorageLocationId.DEFAULT);
+        PantryItem other = PantryItem.create(HOUSEHOLD, rice.getItemName(), rice.getQuantity(), null, LOCATION);
 
         assertThat(other.getPantryItemId()).isNotEqualTo(rice.getPantryItemId());
         assertThat(other.getExpiryDate()).isEmpty();
     }
 
     @Test
+    void householdIsRequired() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> PantryItem.create(null, rice.getItemName(), rice.getQuantity(), null, LOCATION));
+    }
+
+    @Test
+    void belongsToItsHouseholdOnly() {
+        assertThat(rice.getHouseholdId()).isEqualTo(HOUSEHOLD);
+        assertThat(rice.belongsTo(HOUSEHOLD)).isTrue();
+        assertThat(rice.belongsTo(HouseholdId.newId())).isFalse();
+    }
+
+    @Test
     void storageLocationIsRequired() {
         assertThatNullPointerException()
-                .isThrownBy(() -> PantryItem.create(rice.getItemName(), rice.getQuantity(), null, null));
+                .isThrownBy(() -> PantryItem.create(HOUSEHOLD, rice.getItemName(), rice.getQuantity(), null, null));
     }
 
     @Test
@@ -45,7 +61,7 @@ class PantryItemTest {
     @Test
     void equalityIsBasedOnIdOnly() {
         PantryItem sameIdOtherState = new PantryItem(
-                rice.getPantryItemId(),
+                rice.getPantryItemId(), HOUSEHOLD,
                 new ItemName("Anderer Name"),
                 new Quantity(BigDecimal.TEN, Unit.GRAM),
                 null,
@@ -64,8 +80,8 @@ class PantryItemTest {
 
     @Test
     void daysUntilExpiryNeedsAnExpiryDate() {
-        PantryItem salt = PantryItem.create(new ItemName("Salz"), new Quantity(BigDecimal.ONE, Unit.PACKAGE), null,
-                StorageLocationId.DEFAULT);
+        PantryItem salt = PantryItem.create(HOUSEHOLD, new ItemName("Salz"), new Quantity(BigDecimal.ONE, Unit.PACKAGE), null,
+                LOCATION);
 
         assertThatIllegalStateException().isThrownBy(() -> salt.daysUntilExpiry(LocalDate.of(2027, 1, 1)));
     }
@@ -137,8 +153,8 @@ class PantryItemTest {
 
     @Test
     void restoringAnItemBelowMinimumRaisesNoEvent() {
-        PantryItem restored = new PantryItem(PantryItemId.newId(), new ItemName("Mehl"),
-                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.DEFAULT, new BigDecimal("3"));
+        PantryItem restored = new PantryItem(PantryItemId.newId(), HOUSEHOLD, new ItemName("Mehl"),
+                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, LOCATION, new BigDecimal("3"));
 
         assertThat(restored.isBelowMinimum()).isTrue();
         assertThat(restored.pullDomainEvents()).isEmpty();

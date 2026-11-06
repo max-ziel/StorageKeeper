@@ -1,6 +1,8 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.UUID;
@@ -12,5 +14,11 @@ interface SpringDataShoppingListEntryRepository extends JpaRepository<ShoppingLi
 
     void deleteByPantryItemId(UUID pantryItemId);
 
-    List<ShoppingListEntryJpaEntity> findAllByOrderByAddedAtAsc();
+    /** Entries have no household column; they belong to the household of their item. */
+    @Query("""
+            select e from ShoppingListEntryJpaEntity e
+            where e.pantryItemId in (select p.id from PantryItemJpaEntity p where p.householdId = :householdId)
+            order by e.addedAt
+            """)
+    List<ShoppingListEntryJpaEntity> findAllForHousehold(@Param("householdId") UUID householdId);
 }

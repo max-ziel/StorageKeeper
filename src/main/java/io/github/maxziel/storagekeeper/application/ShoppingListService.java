@@ -11,6 +11,7 @@ import io.github.maxziel.storagekeeper.application.port.in.UpdateShoppingListUse
 import io.github.maxziel.storagekeeper.application.port.out.ManualShoppingListRepository;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 import io.github.maxziel.storagekeeper.application.port.out.ShoppingListRepository;
+import io.github.maxziel.storagekeeper.domain.HouseholdId;
 import io.github.maxziel.storagekeeper.domain.ItemName;
 import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntry;
 import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntryId;
@@ -30,7 +31,11 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** Implements the shopping list use cases. */
+/**
+ * Implements the shopping list use cases. The use cases for users work on the current user's household only;
+ * entries of other households count as not found. {@link UpdateShoppingListUseCase} is called by the event
+ * listener after a change that was already checked, so it does not check again.
+ */
 @Service
 public class ShoppingListService implements ListShoppingListUseCase, UpdateShoppingListUseCase,
         CheckOffStockPurchaseUseCase, AddManualShoppingListEntryUseCase, RemoveManualShoppingListEntryUseCase {
@@ -40,12 +45,14 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
     private final PantryItemRepository pantryItemRepository;
     private final RestockPantryItemUseCase restockPantryItem;
     private final Clock clock;
+    private final CurrentHousehold currentHousehold;
 
     public ShoppingListService(ShoppingListRepository shoppingListRepository,
                                ManualShoppingListRepository manualShoppingListRepository,
                                PantryItemRepository pantryItemRepository,
                                RestockPantryItemUseCase restockPantryItem,
-                               Clock clock) {
+                               Clock clock,
+                               CurrentHousehold currentHousehold) {
         this.shoppingListRepository =
                 Objects.requireNonNull(shoppingListRepository, "shoppingListRepository must not be null");
         this.manualShoppingListRepository =
@@ -53,6 +60,7 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
         this.pantryItemRepository = Objects.requireNonNull(pantryItemRepository, "pantryItemRepository must not be null");
         this.restockPantryItem = Objects.requireNonNull(restockPantryItem, "restockPantryItem must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.currentHousehold = Objects.requireNonNull(currentHousehold, "currentHousehold must not be null");
     }
 
     @Override
@@ -76,7 +84,12 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
     @Override
     @Transactional
     public PantryItem checkOff(ShoppingListEntryId shoppingListEntryId, BigDecimal purchasedAmount) {
+        HouseholdId household = currentHousehold.require();
+        // The entry belongs to the household of its item.
         ShoppingListEntry entry = shoppingListRepository.findById(shoppingListEntryId)
+                .filter(found -> pantryItemRepository.findById(found.getPantryItemId())
+                        .map(item -> item.belongsTo(household))
+                        .orElse(false))
                 .orElseThrow(() -> new ShoppingListEntryNotFoundException(shoppingListEntryId));
         return restockPantryItem.restock(entry.getPantryItemId(), purchasedAmount);
     }
@@ -84,25 +97,29 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
     @Override
     @Transactional
     public ManualShoppingListEntry add(ItemName name, Quantity quantity) {
-        return manualShoppingListRepository.save(ManualShoppingListEntry.create(name, quantity, clock.instant()));
+        return manualShoppingListRepository.save(
+                ManualShoppingListEntry.create(currentHousehold.require(), name, quantity, clock.instant()));
     }
 
     @Override
     @Transactional
     public void remove(ManualShoppingListEntryId manualShoppingListEntryId) {
-        if (!manualShoppingListRepository.deleteById(manualShoppingListEntryId)) {
-            throw new ShoppingListEntryNotFoundException(manualShoppingListEntryId);
-        }
+        HouseholdId household = currentHousehold.require();
+        manualShoppingListRepository.findById(manualShoppingListEntryId)
+                .filter(entry -> entry.belongsTo(household))
+                .orElseThrow(() -> new ShoppingListEntryNotFoundException(manualShoppingListEntryId));
+        manualShoppingListRepository.deleteById(manualShoppingListEntryId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ShoppingList getShoppingList() {
-        return new ShoppingList(listStockPurchases(), manualShoppingListRepository.findAll());
+        HouseholdId household = currentHousehold.require();
+        return new ShoppingList(listStockPurchases(household), manualShoppingListRepository.findAll(household));
     }
 
-    private List<ShoppingListItem> listStockPurchases() {
-        List<ShoppingListEntry> entries = shoppingListRepository.findAll();
+    private List<ShoppingListItem> listStockPurchases(HouseholdId household) {
+        List<ShoppingListEntry> entries = shoppingListRepository.findAll(household);
         // One query for all items instead of one per entry.
         Map<PantryItemId, PantryItem> items = pantryItemRepository
                 .findAllById(entries.stream().map(ShoppingListEntry::getPantryItemId).toList())

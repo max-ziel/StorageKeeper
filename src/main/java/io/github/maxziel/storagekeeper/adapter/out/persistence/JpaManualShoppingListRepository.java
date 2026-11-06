@@ -1,11 +1,13 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
 import io.github.maxziel.storagekeeper.application.port.out.ManualShoppingListRepository;
+import io.github.maxziel.storagekeeper.domain.HouseholdId;
 import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntry;
 import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntryId;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Implements the {@link io.github.maxziel.storagekeeper.application.port.out.ManualShoppingListRepository} port
@@ -28,11 +30,16 @@ class JpaManualShoppingListRepository implements ManualShoppingListRepository {
     }
 
     @Override
-    public List<ManualShoppingListEntry> findAll() {
-        return jpaRepository.findAllByOrderByAddedAtAsc()
+    public List<ManualShoppingListEntry> findAll(HouseholdId householdId) {
+        return jpaRepository.findByHouseholdIdOrderByAddedAtAsc(householdId.value())
                 .stream()
                 .map(ManualShoppingListEntryJpaEntity::toDomain)
                 .toList();
+    }
+
+    @Override
+    public Optional<ManualShoppingListEntry> findById(ManualShoppingListEntryId manualShoppingListEntryId) {
+        return jpaRepository.findById(manualShoppingListEntryId.value()).map(ManualShoppingListEntryJpaEntity::toDomain);
     }
 
     @Override

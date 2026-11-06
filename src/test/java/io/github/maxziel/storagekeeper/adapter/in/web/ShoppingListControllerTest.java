@@ -28,6 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class ShoppingListControllerTest {
 
+    private static final HouseholdId HOUSEHOLD = HouseholdId.newId();
+    private static final StorageLocationId LOCATION = StorageLocationId.newId();
     private static final Instant NOW = Instant.parse("2027-02-26T10:00:00Z");
 
     @Autowired
@@ -41,14 +43,14 @@ class ShoppingListControllerTest {
     @MockitoBean
     private RemoveManualShoppingListEntryUseCase removeManualEntry;
 
-    private final PantryItem rice = PantryItem.create(new ItemName("Reis"),
-            new Quantity(new BigDecimal("0.5"), Unit.KILOGRAM), null, StorageLocationId.DEFAULT);
+    private final PantryItem rice = PantryItem.create(HOUSEHOLD, new ItemName("Reis"),
+            new Quantity(new BigDecimal("0.5"), Unit.KILOGRAM), null, LOCATION);
 
     @Test
     void listShowsBothSections() throws Exception {
         rice.changeMinimumAmount(new BigDecimal("2"));
         ShoppingListEntry entry = ShoppingListEntry.create(rice.getPantryItemId(), NOW);
-        ManualShoppingListEntry candles = ManualShoppingListEntry.create(new ItemName("Kerzen"), null, NOW);
+        ManualShoppingListEntry candles = ManualShoppingListEntry.create(HOUSEHOLD, new ItemName("Kerzen"), null, NOW);
         when(listShoppingList.getShoppingList())
                 .thenReturn(new ShoppingList(List.of(new ShoppingListItem(entry, rice)), List.of(candles)));
 
@@ -109,7 +111,7 @@ class ShoppingListControllerTest {
     @Test
     void addManualEntryWithAmount() throws Exception {
         Quantity twelve = new Quantity(new BigDecimal("12"), Unit.PIECE);
-        ManualShoppingListEntry candles = ManualShoppingListEntry.create(new ItemName("Kerzen"), twelve, NOW);
+        ManualShoppingListEntry candles = ManualShoppingListEntry.create(HOUSEHOLD, new ItemName("Kerzen"), twelve, NOW);
         when(addManualEntry.add(new ItemName("Kerzen"), twelve)).thenReturn(candles);
 
         mockMvc.perform(post("/api/shopping-list/manual-entries")
@@ -125,7 +127,7 @@ class ShoppingListControllerTest {
 
     @Test
     void addManualEntryWithoutAmount() throws Exception {
-        ManualShoppingListEntry candles = ManualShoppingListEntry.create(new ItemName("Kerzen"), null, NOW);
+        ManualShoppingListEntry candles = ManualShoppingListEntry.create(HOUSEHOLD, new ItemName("Kerzen"), null, NOW);
         when(addManualEntry.add(any(), isNull())).thenReturn(candles);
 
         mockMvc.perform(post("/api/shopping-list/manual-entries")

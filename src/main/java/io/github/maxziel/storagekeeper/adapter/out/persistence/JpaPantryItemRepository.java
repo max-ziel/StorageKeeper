@@ -4,6 +4,7 @@ import io.github.maxziel.storagekeeper.application.port.PageQuery;
 import io.github.maxziel.storagekeeper.application.port.ResultPage;
 import io.github.maxziel.storagekeeper.application.port.in.PantryItemFilter;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
+import io.github.maxziel.storagekeeper.domain.HouseholdId;
 import io.github.maxziel.storagekeeper.domain.PantryItem;
 import io.github.maxziel.storagekeeper.domain.PantryItemId;
 import org.springframework.data.domain.Page;
@@ -45,13 +46,6 @@ class JpaPantryItemRepository implements PantryItemRepository {
     }
 
     @Override
-    public List<PantryItem> findAll() {
-        return jpaRepository.findAll().stream()
-                .map(PantryItemJpaEntity::toDomain)
-                .toList();
-    }
-
-    @Override
     @Transactional
     public boolean deleteById(PantryItemId pantryItemId) {
         if (!jpaRepository.existsById(pantryItemId.value())) {
@@ -63,15 +57,16 @@ class JpaPantryItemRepository implements PantryItemRepository {
     }
 
     @Override
-    public List<PantryItem> findWithExpiryDateUpTo(LocalDate latest) {
-        return jpaRepository.findByExpiryDateLessThanEqualOrderByExpiryDateAsc(latest).stream()
+    public List<PantryItem> findWithExpiryDateUpTo(HouseholdId householdId, LocalDate latest) {
+        return jpaRepository.findByHouseholdIdAndExpiryDateLessThanEqualOrderByExpiryDateAsc(
+                        householdId.value(), latest).stream()
                 .map(PantryItemJpaEntity::toDomain)
                 .toList();
     }
 
     @Override
-    public ResultPage<PantryItem> search(PantryItemFilter filter, PageQuery page) {
-        Specification<PantryItemJpaEntity> specification = Specification.unrestricted();
+    public ResultPage<PantryItem> search(HouseholdId householdId, PantryItemFilter filter, PageQuery page) {
+        Specification<PantryItemJpaEntity> specification = PantryItemSpecifications.inHousehold(householdId.value());
 
         if (filter.storageLocationId() != null) {
             specification = specification.and(

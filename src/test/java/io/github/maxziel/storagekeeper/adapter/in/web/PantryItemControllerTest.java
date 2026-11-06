@@ -30,6 +30,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WithMockUser
 class PantryItemControllerTest {
 
+    private static final HouseholdId HOUSEHOLD = HouseholdId.newId();
+    private static final StorageLocationId LOCATION = StorageLocationId.newId();
+
     @Autowired
     private MockMvc mockMvc;
     @MockitoBean
@@ -47,11 +50,11 @@ class PantryItemControllerTest {
 
     @Test
     void addReturnsCreatedItemWithLocation() throws Exception {
-        PantryItem rice = PantryItem.create(
+        PantryItem rice = PantryItem.create(HOUSEHOLD,
                 new ItemName("Reis"),
                 new Quantity(BigDecimal.ONE, Unit.KILOGRAM),
                 LocalDate.of(2027, 3, 1),
-                StorageLocationId.DEFAULT
+                LOCATION
         );
 
         when(addPantryItem.add(any())).thenReturn(rice);
@@ -66,7 +69,7 @@ class PantryItemControllerTest {
                 .andExpect(jsonPath("$.name").value("Reis"))
                 .andExpect(jsonPath("$.unit").value("KILOGRAM"))
                 .andExpect(jsonPath("$.expiryDate").value("2027-03-01"))
-                .andExpect(jsonPath("$.storageLocationId").value(StorageLocationId.DEFAULT.toString()));
+                .andExpect(jsonPath("$.storageLocationId").value(LOCATION.toString()));
     }
 
     @Test
@@ -106,8 +109,8 @@ class PantryItemControllerTest {
 
     @Test
     void listExpiringReturnsDaysUntilExpiry() throws Exception {
-        PantryItem milk = PantryItem.create(new ItemName("Milch"), new Quantity(BigDecimal.ONE, Unit.LITER),
-                LocalDate.of(2027, 2, 24), StorageLocationId.DEFAULT);
+        PantryItem milk = PantryItem.create(HOUSEHOLD, new ItemName("Milch"), new Quantity(BigDecimal.ONE, Unit.LITER),
+                LocalDate.of(2027, 2, 24), LOCATION);
         when(listExpiringPantryItems.listExpiringWithin(3)).thenReturn(List.of(new ExpiringPantryItem(milk, -2)));
 
         mockMvc.perform(get("/api/pantry-items/expiring").param("days", "3"))
@@ -137,15 +140,15 @@ class PantryItemControllerTest {
 
     @Test
     void listReturnsPageWithFiltersApplied() throws Exception {
-        PantryItem rice = PantryItem.create(new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null,
-                StorageLocationId.DEFAULT);
+        PantryItem rice = PantryItem.create(HOUSEHOLD, new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null,
+                LOCATION);
         rice.changeMinimumAmount(new BigDecimal("2"));
-        PantryItemFilter filter = new PantryItemFilter(StorageLocationId.DEFAULT, true);
+        PantryItemFilter filter = new PantryItemFilter(LOCATION, true);
         when(listPantryItems.search(filter, new PageQuery(0, 5)))
                 .thenReturn(new ResultPage<>(List.of(rice), 0, 5, 6));
 
         mockMvc.perform(get("/api/pantry-items")
-                        .param("storageLocationId", StorageLocationId.DEFAULT.toString())
+                        .param("storageLocationId", LOCATION.toString())
                         .param("belowMinimum", "true")
                         .param("size", "5"))
                 .andExpect(status().isOk())
@@ -179,8 +182,8 @@ class PantryItemControllerTest {
 
     @Test
     void changeMinimumAmountReturnsUpdatedItem() throws Exception {
-        PantryItem rice = PantryItem.create(new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null,
-                StorageLocationId.DEFAULT);
+        PantryItem rice = PantryItem.create(HOUSEHOLD, new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null,
+                LOCATION);
         rice.changeMinimumAmount(new BigDecimal("0.5"));
         when(changeMinimumAmount.changeMinimumAmount(rice.getPantryItemId(), new BigDecimal("0.5"))).thenReturn(rice);
 

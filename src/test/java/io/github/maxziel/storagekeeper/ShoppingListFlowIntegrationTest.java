@@ -1,6 +1,7 @@
 package io.github.maxziel.storagekeeper;
 
 import com.jayway.jsonpath.JsonPath;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * End-to-end check of the event flow: REST call, domain event, listener, shopping list in PostgreSQL.
  * Only a test with the whole application running shows that all parts are wired up correctly.
+ * All tests run as the same user, who needs a household first.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -30,6 +32,17 @@ class ShoppingListFlowIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    /** The first test creates the household; for the others it already exists (409). */
+    @BeforeEach
+    void ensureHousehold() throws Exception {
+        mockMvc.perform(post("/api/household")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Testhaushalt"}
+                                """))
+                .andExpect(status().is(anyOf(is(201), is(409))));
+    }
 
     @Test
     void itemBelowMinimumAppearsOnTheListAndDisappearsWhenRestocked() throws Exception {

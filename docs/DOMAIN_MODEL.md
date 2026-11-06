@@ -1,8 +1,8 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M5, Teil 1 (Einkaufsliste mit Vorratseinkäufen über Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL;
-API nur mit JWT erreichbar).
+Stand: M5 (Haushalte: jeder Nutzer sieht nur den Vorrat seines Haushalts; API nur mit JWT erreichbar;
+Einkaufsliste mit Vorratseinkäufen über Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL).
 
 ## Grundbegriffe
 
@@ -11,7 +11,7 @@ API nur mit JWT erreichbar).
 |--------------------|-------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------|
 | **Entity**         | Hat eine eigene Identität. Zwei Objekte sind gleich, wenn ihre ID gleich ist, auch wenn sich ihr Zustand unterscheidet. | Klasse; `equals`/`hashCode` nur über die ID                  |
 | **Value Object**   | Hat keine Identität. Zwei Objekte sind gleich, wenn alle Werte gleich sind. Unveränderlich.                             | `record`                                                     |
-| **Aggregate Root** | Einstiegspunkt für eine Gruppe zusammengehöriger Objekte. Änderungen laufen nur über ihn.                               | `PantryItem`                                                 |
+| **Aggregate Root** | Einstiegspunkt für eine Gruppe zusammengehöriger Objekte. Änderungen laufen nur über ihn.                               | z. B. `PantryItem`, `Household`                              |
 | **Invariante**     | Regel, die für ein Objekt immer gilt.                                                                                   | Prüfung im Konstruktor; Verstoß → `IllegalArgumentException` |
 
 Weil jede Klasse ihre Regeln im Konstruktor prüft, kann im Programm kein ungültiges Objekt existieren.
@@ -25,12 +25,14 @@ classDiagram
 
     class PantryItem {
         -PantryItemId pantryItemId
+        -HouseholdId householdId
         -ItemName itemName
         -Quantity quantity
         -LocalDate expiryDate
         -StorageLocationId storageLocationId
         -BigDecimal minimumAmount
-        +create(ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId)$ PantryItem
+        +create(HouseholdId householdId, ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId)$ PantryItem
+        +belongsTo(HouseholdId household) boolean
         +changeQuantity(BigDecimal newAmount) void
         +restock(BigDecimal purchasedAmount) void
         +changeMinimumAmount(BigDecimal newMinimumAmount) void
@@ -73,15 +75,18 @@ classDiagram
 
     class StorageLocation {
         -StorageLocationId storageLocationId
+        -HouseholdId householdId
         -LocationName locationName
-        +create(LocationName locationName)$ StorageLocation
+        -boolean defaultLocation
+        +create(HouseholdId householdId, LocationName locationName)$ StorageLocation
+        +createDefault(HouseholdId householdId)$ StorageLocation
+        +belongsTo(HouseholdId household) boolean
         +getStorageLocationId() StorageLocationId
         +getLocationName() LocationName
         +isDefault() boolean
     }
 
     class StorageLocationId {
-        +StorageLocationId DEFAULT$
         +UUID value
         +newId()$ StorageLocationId
     }
@@ -98,6 +103,48 @@ classDiagram
     PantryItem --> StorageLocationId : liegt in
     StorageLocation *-- StorageLocationId
     StorageLocation *-- LocationName
+
+    class Household {
+        -HouseholdId householdId
+        -HouseholdName name
+        -InviteCode inviteCode
+        -List~HouseholdMember~ members
+        +found(HouseholdName name, HouseholdMember founder, InviteCode inviteCode)$ Household
+        +join(HouseholdMember member) void
+        +hasMember(UserId userId) boolean
+    }
+
+    class HouseholdId {
+        +UUID value
+        +newId()$ HouseholdId
+    }
+
+    class HouseholdName {
+        +int MAX_LENGTH$
+        +String value
+    }
+
+    class InviteCode {
+        +String value
+        +generate()$ InviteCode
+    }
+
+    class HouseholdMember {
+        +UserId userId
+        +String name
+    }
+
+    class UserId {
+        +String value
+    }
+
+    Household *-- HouseholdId
+    Household *-- HouseholdName
+    Household *-- InviteCode
+    Household *-- "*" HouseholdMember
+    HouseholdMember *-- UserId
+    PantryItem --> HouseholdId : gehört zu
+    StorageLocation --> HouseholdId : gehört zu
 
     class ShoppingListEntry {
         -ShoppingListEntryId shoppingListEntryId
@@ -118,10 +165,11 @@ classDiagram
 
     class ManualShoppingListEntry {
         -ManualShoppingListEntryId manualShoppingListEntryId
+        -HouseholdId householdId
         -ItemName name
         -Quantity quantity
         -Instant addedAt
-        +create(ItemName name, Quantity quantity, Instant now)$ ManualShoppingListEntry
+        +create(HouseholdId householdId, ItemName name, Quantity quantity, Instant now)$ ManualShoppingListEntry
         +getQuantity() Optional~Quantity~
     }
 
@@ -134,6 +182,7 @@ classDiagram
     ManualShoppingListEntry *-- ManualShoppingListEntryId
     ManualShoppingListEntry *-- ItemName
     ManualShoppingListEntry *-- Quantity : optional
+    ManualShoppingListEntry --> HouseholdId : gehört zu
     PantryItemFellBelowMinimum ..|> DomainEvent
     PantryItemReachedMinimum ..|> DomainEvent
     PantryItem ..> DomainEvent : erzeugt
@@ -148,6 +197,7 @@ Ein Produkt im Vorrat, z. B. „1 kg Reis, haltbar bis 01.03.2027“.
 | Feld                | Typ                 | Pflicht | Regel                                                                                 |
 |---------------------|---------------------|---------|---------------------------------------------------------------------------------------|
 | `pantryItemId`      | `PantryItemId`      | ja      | unveränderlich                                                                        |
+| `householdId`       | `HouseholdId`       | ja      | Haushalt, dem der Artikel gehört; unveränderlich                                      |
 | `itemName`          | `ItemName`          | ja      | unveränderlich                                                                        |
 | `quantity`          | `Quantity`          | ja      | änderbar über `changeQuantity`                                                        |
 | `expiryDate`        | `LocalDate`         | nein    | `null` = kein Ablaufdatum; nach außen als `Optional`                                  |
@@ -171,6 +221,8 @@ Ein Produkt im Vorrat, z. B. „1 kg Reis, haltbar bis 01.03.2027“.
   als der Mindestbestand ist; genau gleich viel gilt als ausreichend. Das ist die Grundlage für die Einkaufsliste in M4.
 - **Lagerort:** Jeder Artikel liegt in genau einem Lagerort. `PantryItem` hält dafür nur die `StorageLocationId`,
   nicht das `StorageLocation`-Objekt selbst (siehe unten).
+- **Haushalt:** `belongsTo(household)` sagt, ob der Artikel zu diesem Haushalt gehört. Damit prüfen die Services,
+  ob der angemeldete Nutzer ihn sehen und ändern darf (siehe „Haushalte und Autorisierung“).
 
 ### `PantryItemId` – Value Object
 
@@ -208,19 +260,23 @@ Umrechnungen zwischen Einheiten gibt es bewusst (noch) nicht.
 
 Ein Ort, an dem Vorräte liegen, z. B. „Kühlschrank“ oder „Keller“.
 
-| Feld                | Typ                 | Pflicht | Regel                                               |
-|---------------------|---------------------|---------|-----------------------------------------------------|
-| `storageLocationId` | `StorageLocationId` | ja      | unveränderlich                                      |
-| `locationName`      | `LocationName`      | ja      | eindeutig, ohne Rücksicht auf Groß-/Kleinschreibung |
+| Feld                | Typ                 | Pflicht | Regel                                                           |
+|---------------------|---------------------|---------|-----------------------------------------------------------------|
+| `storageLocationId` | `StorageLocationId` | ja      | unveränderlich                                                  |
+| `householdId`       | `HouseholdId`       | ja      | Haushalt, dem der Lagerort gehört; unveränderlich               |
+| `locationName`      | `LocationName`      | ja      | eindeutig im Haushalt, ohne Rücksicht auf Groß-/Kleinschreibung |
+| `defaultLocation`   | `boolean`           | ja      | `true` für den Basis-Lagerort; genau einer pro Haushalt         |
 
-- **Basis-Lagerort:** Genau ein Lagerort existiert von Anfang an: „Vorrat“ mit der festen ID
-  `StorageLocationId.DEFAULT` (`00000000-0000-0000-0000-000000000001`). Er wird von der Migration angelegt.
-  `isDefault()` liefert für ihn `true`.
+- **Basis-Lagerort:** Jeder Haushalt bekommt beim Anlegen genau einen Basis-Lagerort „Vorrat“
+  (`StorageLocation.createDefault(householdId)`, angelegt von `HouseholdService`). `isDefault()` liefert für ihn `true`.
+  Bis M4 gab es dafür eine feste ID (`StorageLocationId.DEFAULT`); mit mehreren Haushalten braucht jeder seinen eigenen.
 - **Standard beim Anlegen:** Gibt der Nutzer beim Anlegen eines Artikels keinen Lagerort an,
-  setzt `PantryItemService` den Basis-Lagerort ein. Ein angegebener Lagerort muss existieren.
+  setzt `PantryItemService` den Basis-Lagerort des Haushalts ein. Ein angegebener Lagerort muss existieren
+  und zum Haushalt gehören.
 - **Weitere Lagerorte** legt nur der Nutzer an (`POST /api/storage-locations`).
-- **Eindeutige Namen:** `StorageLocationService` lehnt einen Namen ab, den es schon gibt („Keller“ = „keller“).
-  Zusätzlich sichert ein Unique-Index in der Datenbank das ab.
+- **Eindeutige Namen:** `StorageLocationService` lehnt einen Namen ab, den es im Haushalt schon gibt
+  („Keller“ = „keller“). Andere Haushalte dürfen denselben Namen verwenden. Zusätzlich sichert ein Unique-Index
+  in der Datenbank das ab.
 
 **Warum nur die ID im Artikel?** Artikel und Lagerort sind zwei getrennte Aggregate: Ein Lagerort
 existiert unabhängig von seinen Artikeln, und beide werden getrennt geändert. Würde `PantryItem` das
@@ -230,7 +286,6 @@ und Änderungen am einen könnten versehentlich den anderen betreffen. Der Verwe
 ### `StorageLocationId` – Value Object
 
 Wie `PantryItemId`: kapselt eine `UUID`, `newId()` erzeugt eine zufällige ID.
-Zusätzlich gibt es die Konstante `DEFAULT` für den Basis-Lagerort.
 
 ### `LocationName` – Value Object
 
@@ -255,12 +310,13 @@ Wie viel gekauft werden muss, steht nicht im Eintrag, sondern wird beim Anzeigen
 
 Etwas, das der Nutzer selbst auf die Liste schreibt, z. B. „Geburtstagskerzen“. Es hängt an keinem Artikel.
 
-| Feld                        | Typ                         | Pflicht | Regel                                             |
-|-----------------------------|-----------------------------|---------|---------------------------------------------------|
-| `manualShoppingListEntryId` | `ManualShoppingListEntryId` | ja      | unveränderlich                                    |
-| `name`                      | `ItemName`                  | ja      | dieselben Regeln wie beim Artikelnamen            |
-| `quantity`                  | `Quantity`                  | nein    | `null` = ohne Mengenangabe; wenn gesetzt, > 0     |
-| `addedAt`                   | `Instant`                   | ja      | Zeitpunkt, an dem der Eintrag entstand            |
+| Feld                        | Typ                         | Pflicht | Regel                                         |
+|-----------------------------|-----------------------------|---------|-----------------------------------------------|
+| `manualShoppingListEntryId` | `ManualShoppingListEntryId` | ja      | unveränderlich                                |
+| `householdId`               | `HouseholdId`               | ja      | Haushalt, auf dessen Liste der Eintrag steht  |
+| `name`                      | `ItemName`                  | ja      | dieselben Regeln wie beim Artikelnamen        |
+| `quantity`                  | `Quantity`                  | nein    | `null` = ohne Mengenangabe; wenn gesetzt, > 0 |
+| `addedAt`                   | `Instant`                   | ja      | Zeitpunkt, an dem der Eintrag entstand        |
 
 **Warum eine eigene Klasse statt `ShoppingListEntry` mit optionalem Artikel?** Die beiden verhalten sich
 verschieden: Ein Vorratseinkauf entsteht und verschwindet automatisch und ändert beim Abhaken den Bestand,
@@ -270,6 +326,40 @@ jede Methode eine Fallunterscheidung „mit oder ohne Artikel“.
 ### `ManualShoppingListEntryId` – Value Object
 
 Wie `PantryItemId`: kapselt eine `UUID`, `newId()` erzeugt eine zufällige ID.
+
+### `Household` – Entity, Aggregate Root
+
+Eine Gruppe von Nutzern, die einen Vorrat teilen: Artikel, Lagerorte und Einkaufsliste.
+
+| Feld          | Typ                     | Pflicht | Regel                                                |
+|---------------|-------------------------|---------|------------------------------------------------------|
+| `householdId` | `HouseholdId`           | ja      | unveränderlich                                       |
+| `name`        | `HouseholdName`         | ja      | nicht leer, höchstens 50 Zeichen (nach dem Strippen) |
+| `inviteCode`  | `InviteCode`            | ja      | eindeutig über alle Haushalte                        |
+| `members`     | `List<HouseholdMember>` | ja      | in Beitrittsreihenfolge; kein Nutzer doppelt         |
+
+- **Anlegen:** `Household.found(name, founder, inviteCode)` erzeugt eine neue ID; der Gründer ist das erste Mitglied.
+- **Beitreten:** `join(member)` hängt ein Mitglied an; ist der Nutzer schon Mitglied, gibt es eine
+  `IllegalStateException`.
+- **Ein Haushalt pro Nutzer:** Diese Regel betrifft mehrere Haushalte und lässt sich deshalb nicht in einem
+  `Household` prüfen. `HouseholdService` prüft sie vor dem Anlegen und Beitreten, die Datenbank sichert sie ab
+  (Primärschlüssel `household_member.user_id`).
+- Ein Haushalt **ohne Mitglieder** ist erlaubt, aber nur für den Haushalt, den die Migration für alte Daten anlegt.
+- Die anderen Aggregate verweisen nur über die `HouseholdId` auf ihn, wie ein Artikel auf seinen Lagerort.
+
+### `HouseholdMember`, `UserId`, `InviteCode` – Value Objects
+
+| Typ               | Felder           | Regel                                                                                                   |
+|-------------------|------------------|---------------------------------------------------------------------------------------------------------|
+| `UserId`          | `value`          | ID des Nutzers beim Identity Provider (JWT-Claim `sub`), nicht leer, höchstens 255 Zeichen              |
+| `HouseholdMember` | `userId`, `name` | `name` ist nur zur Anzeige (`preferred_username` beim Beitritt), nicht leer, höchstens 255 Zeichen      |
+| `InviteCode`      | `value`          | Form `XXXX-XXXX` aus `A–Z` und `2–9` ohne `0`, `O`, `1`, `I`; Eingabe wird getrimmt und großgeschrieben |
+
+- **Warum `sub` und nicht der Benutzername?** Den Benutzernamen kann man in Keycloak ändern; `sub` bleibt gleich.
+  Nutzer werden nur im Identity Provider verwaltet, die App speichert nur, wer in welchem Haushalt ist.
+- **Einladungscode:** `InviteCode.generate()` zieht 8 Zeichen mit `SecureRandom` aus 32 möglichen, also etwa
+  10¹² Codes; erraten ist praktisch ausgeschlossen. Verwechselbare Zeichen fehlen, damit man den Code auch
+  vorlesen oder abtippen kann.
 
 ### Domain-Events
 
@@ -497,11 +587,75 @@ sequenceDiagram
   `detail` ist bei fehlendem Token „A valid bearer token is required.“, bei ungültigem Token der Grund
   (z. B. abgelaufen).
 
-In diesem Teil gilt noch: Wer angemeldet ist, sieht alles. Haushalte und die Prüfung, wer welchen Vorrat sehen darf,
-folgen in M5, Teil 2; diese Prüfung liegt dann im Application-Layer, nicht im Filter.
+Der Filter prüft nur, **wer** der Nutzer ist (Authentifizierung). **Was** er sehen darf (Autorisierung),
+entscheidet der Application-Layer, siehe nächster Abschnitt.
 
 **In Tests** braucht es keinen Keycloak: Die Controller-Tests laufen mit `@WithMockUser` als angemeldeter Nutzer,
 `ApiSecurityTest` prüft die Regeln mit der echten Filterkette und setzt per `jwt()` ein bereits geprüftes Token ein.
+
+## Haushalte und Autorisierung
+
+Alle Daten gehören zu genau einem Haushalt: Artikel, Lagerorte und manuelle Einträge haben eine `householdId`,
+ein Vorratseinkauf gehört zum Haushalt seines Artikels. Ein Nutzer ist in höchstens einem Haushalt und sieht nur
+dessen Daten.
+
+### Haushalt anlegen und beitreten
+
+| Endpunkt                   | Use Case                 | Was passiert                                                                         |
+|----------------------------|--------------------------|--------------------------------------------------------------------------------------|
+| `POST /api/household`      | `CreateHouseholdUseCase` | neuer Haushalt mit Einladungscode und Basis-Lagerort; der Nutzer ist erstes Mitglied |
+| `GET /api/household`       | `ShowHouseholdUseCase`   | eigener Haushalt mit Code und Mitgliedern                                            |
+| `POST /api/household/join` | `JoinHouseholdUseCase`   | Nutzer wird Mitglied des Haushalts mit diesem Code                                   |
+
+Wer schon in einem Haushalt ist, kann keinen weiteren anlegen oder beitreten (`409`). Austreten und Mitglieder
+entfernen gibt es (noch) nicht.
+
+### Wo die Prüfung stattfindet
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant F as Spring Security (Filter)
+    participant W as PantryItemController
+    participant S as PantryItemService
+    participant H as CurrentHousehold
+    participant U as SpringSecurityCurrentUserProvider
+    participant R as PantryItemRepository
+
+    C->>F: PATCH /api/pantry-items/{id}/quantity (Bearer JWT)
+    F->>F: Token prüfen, Nutzer im SecurityContext ablegen
+    F->>W: Request
+    W->>S: changeQuantity(id, 0.5)
+    S->>H: require()
+    H->>U: currentUser()
+    U-->>H: CurrentUser(sub, preferred_username)
+    H-->>S: HouseholdId (sonst NoHouseholdException → 403)
+    S->>R: findById(id)
+    R-->>S: PantryItem
+    S->>S: item.belongsTo(household)? sonst PantryItemNotFoundException → 404
+    S->>S: ändern, speichern, Events veröffentlichen
+    S-->>W: PantryItem
+    W-->>C: 200
+```
+
+- **Im Application-Layer:** Jeder Service fragt zuerst `CurrentHousehold.require()` nach dem Haushalt des
+  angemeldeten Nutzers. Einzelne Objekte prüft er mit `belongsTo(household)`; Listen fragt er gleich mit der
+  `HouseholdId` beim Repository an, damit in der Datenbank gefiltert wird. Controller und Domain wissen nichts
+  davon: Die Controller haben sich durch M5 nicht geändert, und `PantryItem` kennt nur seine eigene `HouseholdId`.
+- **Warum nicht im Controller oder Filter?** Die Regel „nur der eigene Haushalt“ ist fachlich und gilt für jeden
+  Weg in die Anwendung, nicht nur für REST. Im Application-Layer kann man sie ohne HTTP testen
+  (`PantryItemServiceTest`), und kein neuer Controller kann sie vergessen.
+- **Woher kennt die Application den Nutzer?** Über den Port `CurrentUserProvider` (`application.port.out`).
+  `adapter.out.security.SpringSecurityCurrentUserProvider` liest ihn aus Springs `SecurityContext`: `sub` als
+  `UserId`, `preferred_username` als Anzeigename. So hängt die Application nicht von Spring Security ab.
+- **Fremde Daten sind „nicht gefunden“:** Ein Artikel oder Eintrag eines anderen Haushalts ergibt `404`, nicht
+  `403`. So verrät die Antwort nicht, dass es die ID gibt.
+- **Ohne Haushalt** ergibt jeder Use Case auf Vorratsdaten `NoHouseholdException` (`403`,
+  „Create or join a household first.“).
+- **Einkaufsliste aus Events:** `UpdateShoppingListUseCase` (vom `ShoppingListEventListener` aufgerufen) prüft
+  nicht erneut. Er reagiert nur auf Änderungen, die schon geprüft wurden.
+- **Zusätzlich in der Datenbank:** Ein Fremdschlüssel `(storage_location_id, household_id)` verhindert, dass ein
+  Artikel in einem Lagerort eines anderen Haushalts landet, selbst wenn der Code einmal falsch prüfen sollte.
 
 ## API-Dokumentation
 
@@ -589,6 +743,13 @@ sequenceDiagram
 | `name`                                | `getLocationName().value()`          |
 | `defaultLocation`                     | `isDefault()`                        |
 
+| JSON-Feld (`HouseholdResponse`) | Quelle im Domain-Modell                               |
+|---------------------------------|-------------------------------------------------------|
+| `id`                            | `getHouseholdId().value()`                            |
+| `name`                          | `getName().value()`                                   |
+| `inviteCode`                    | `getInviteCode().value()`                             |
+| `members`                       | Namen aus `getMembers()`; die User-IDs bleiben intern |
+
 `ExpiringPantryItemResponse` (für `/expiring`) enthält dieselben Felder wie `PantryItemResponse`
 plus `daysUntilExpiry` (aus `ExpiringPantryItem.daysUntilExpiry()`) und `expired` (aus `expired()`).
 
@@ -608,6 +769,12 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Lagerort-Name existiert schon (`StorageLocationAlreadyExistsException`) | 409         |
 | Einkaufslisten-Eintrag unbekannt (`ShoppingListEntryNotFoundException`) | 404         |
 | Kein oder ungültiges Token (`AuthenticationException`)                  | 401         |
+| Nutzer ohne Haushalt (`NoHouseholdException`)                           | 403         |
+| Schon Mitglied eines Haushalts (`AlreadyInHouseholdException`)          | 409         |
+| Einladungscode unbekannt (`UnknownInviteCodeException`)                 | 400         |
+
+Artikel, Lagerorte und Einträge eines anderen Haushalts behandeln die Services wie unbekannte IDs
+(`404`, beim Lagerort im Request `400`).
 
 `ShoppingListEntryResponse` (für `/api/shopping-list`) enthält `id` (Eintrag), `pantryItemId`, `name`, `unit`,
 `amount`, `minimumAmount`, `storageLocationId` und `addedAt` sowie `missingAmount` aus `getMissingQuantity()`.
@@ -633,6 +800,7 @@ Angelegt durch die Flyway-Migration `src/main/resources/db/migration/V1__create_
 | `expiry_date`         | `DATE`         | ja    | `expiryDate`                                                             |
 | `storage_location_id` | `UUID`         | nein  | `storageLocationId`; Fremdschlüssel auf `storage_location(id)` (seit V2) |
 | `minimum_amount`      | `NUMERIC`      | nein  | `minimumAmount`; `CHECK (minimum_amount >= 0)`, Standard `0` (seit V4)   |
+| `household_id`        | `UUID`         | nein  | `householdId`; Fremdschlüssel auf `household(id)` (seit V7)              |
 
 `NUMERIC` ohne feste Nachkommastellen speichert den Wert genau so, wie er kommt (`1.5` bleibt `1.5`).
 Bei `NUMERIC(12,3)` käme `1.500` zurück, und `Quantity` würde dann nicht mehr als gleich gelten,
@@ -642,14 +810,17 @@ weil `BigDecimal.equals` die Nachkommastellen mit vergleicht.
 
 Angelegt durch die Flyway-Migration `src/main/resources/db/migration/V2__create_storage_location.sql`.
 
-| Spalte | Typ           | Null? | Herkunft im Domain-Modell                                    |
-|--------|---------------|-------|--------------------------------------------------------------|
-| `id`   | `UUID`        | nein  | `StorageLocationId.value` (Primärschlüssel)                  |
-| `name` | `VARCHAR(50)` | nein  | `LocationName.value`; Unique-Index auf `LOWER(name)`         |
+| Spalte             | Typ           | Null? | Herkunft im Domain-Modell                                   |
+|--------------------|---------------|-------|-------------------------------------------------------------|
+| `id`               | `UUID`        | nein  | `StorageLocationId.value` (Primärschlüssel)                 |
+| `name`             | `VARCHAR(50)` | nein  | `LocationName.value`; seit V7 eindeutig pro Haushalt        |
+| `household_id`     | `UUID`        | nein  | `householdId`; Fremdschlüssel auf `household(id)` (seit V7) |
+| `default_location` | `BOOLEAN`     | nein  | `defaultLocation`; höchstens einer pro Haushalt (seit V7)   |
 
 Was V2 außerdem macht:
 
-1. Legt den Basis-Lagerort „Vorrat“ mit der ID `00000000-0000-0000-0000-000000000001` an.
+1. Legt den Basis-Lagerort „Vorrat“ mit der ID `00000000-0000-0000-0000-000000000001` an
+   (seit V7 der Basis-Lagerort des migrierten Haushalts, siehe unten).
 2. Fügt `pantry_item.storage_location_id` als Pflichtspalte mit Fremdschlüssel hinzu.
    Bereits vorhandene Artikel bekommen dabei den Basis-Lagerort.
 3. Entfernt danach den Spalten-Default wieder: Neue Zeilen müssen den Lagerort ausdrücklich setzen.
@@ -683,18 +854,51 @@ Vorhandene Artikel bekommen dadurch „kein Mindestbestand“. Außerdem kommt e
 V5 legt außerdem für alle Artikel, die beim Migrieren schon unter ihrem Mindestbestand liegen, einen Eintrag an.
 Ohne das würden sie erst auf der Liste erscheinen, nachdem sie einmal über und wieder unter das Minimum gegangen sind.
 
-### Tabelle `manual_shopping_list_entry` (Migration V6)
+### Tabelle `manual_shopping_list_entry` (Migration V6, `household_id` seit V7)
 
-| Spalte     | Typ                        | Null? | Herkunft im Domain-Modell                                 |
-|------------|----------------------------|-------|-----------------------------------------------------------|
-| `id`       | `UUID`                     | nein  | `ManualShoppingListEntryId.value` (Primärschlüssel)       |
-| `name`     | `VARCHAR(100)`             | nein  | `ItemName.value`                                          |
-| `amount`   | `NUMERIC`                  | ja    | `Quantity.amount`; `CHECK (amount > 0)`                   |
-| `unit`     | `VARCHAR(20)`              | ja    | `Quantity.unit`                                           |
-| `added_at` | `TIMESTAMP WITH TIME ZONE` | nein  | `addedAt`                                                 |
+| Spalte         | Typ                        | Null? | Herkunft im Domain-Modell                           |
+|----------------|----------------------------|-------|-----------------------------------------------------|
+| `id`           | `UUID`                     | nein  | `ManualShoppingListEntryId.value` (Primärschlüssel) |
+| `name`         | `VARCHAR(100)`             | nein  | `ItemName.value`                                    |
+| `amount`       | `NUMERIC`                  | ja    | `Quantity.amount`; `CHECK (amount > 0)`             |
+| `unit`         | `VARCHAR(20)`              | ja    | `Quantity.unit`                                     |
+| `added_at`     | `TIMESTAMP WITH TIME ZONE` | nein  | `addedAt`                                           |
+| `household_id` | `UUID`                     | nein  | `householdId`; Fremdschlüssel auf `household(id)`   |
 
 Ein `CHECK ((amount IS NULL) = (unit IS NULL))` stellt sicher, dass Menge und Einheit nur zusammen gesetzt sind.
 Einen Fremdschlüssel gibt es nicht, weil manuelle Einträge an keinem Artikel hängen.
+
+### Tabellen `household` und `household_member` (Migration V7)
+
+| Tabelle            | Spalte         | Typ            | Herkunft im Domain-Modell                                     |
+|--------------------|----------------|----------------|---------------------------------------------------------------|
+| `household`        | `id`           | `UUID`         | `HouseholdId.value` (Primärschlüssel)                         |
+| `household`        | `name`         | `VARCHAR(50)`  | `HouseholdName.value`                                         |
+| `household`        | `invite_code`  | `VARCHAR(9)`   | `InviteCode.value`; `UNIQUE`                                  |
+| `household_member` | `user_id`      | `VARCHAR(255)` | `UserId.value`; **Primärschlüssel**: ein Nutzer, ein Haushalt |
+| `household_member` | `household_id` | `UUID`         | Fremdschlüssel auf `household(id)`                            |
+| `household_member` | `name`         | `VARCHAR(255)` | `HouseholdMember.name`                                        |
+| `household_member` | `position`     | `INTEGER`      | Beitrittsreihenfolge (`@OrderColumn`)                         |
+
+Die Mitglieder gehören zum Aggregat `Household` und werden in `HouseholdJpaEntity` als `@ElementCollection`
+mit ihm gespeichert und geladen.
+
+Was V7 mit vorhandenen Daten macht:
+
+1. Gibt es schon Artikel, manuelle Einträge oder eigene Lagerorte, legt V7 einen Haushalt „Haushalt“ mit der ID
+   `00000000-0000-0000-0000-000000000001` **ohne Mitglieder** an. Sein Einladungscode wird zufällig erzeugt
+   (`SELECT invite_code FROM household;`); wer die alten Daten übernehmen soll, tritt damit bei.
+2. Alle vorhandenen Artikel, Lagerorte und manuellen Einträge kommen in diesen Haushalt; der alte Basis-Lagerort
+   „Vorrat“ wird sein `default_location`.
+3. Auf einer leeren Datenbank legt V7 keinen Haushalt an und löscht den alten globalen Basis-Lagerort;
+   Basis-Lagerorte entstehen ab jetzt mit jedem Haushalt.
+4. Der Unique-Index auf Lagerort-Namen gilt jetzt pro Haushalt; ein zweiter partieller Index erlaubt nur einen
+   `default_location` pro Haushalt.
+5. Der Fremdschlüssel `pantry_item (storage_location_id, household_id) → storage_location (id, household_id)`
+   stellt sicher, dass ein Artikel nur in einem Lagerort des eigenen Haushalts liegt.
+
+`HouseholdMigrationTest` prüft beides (mit alten Daten und auf einer leeren Datenbank): Es migriert eine eigene
+Datenbank bis V6, füllt sie und migriert dann weiter.
 
 ### Domain-Klasse und JPA-Entity sind getrennt
 

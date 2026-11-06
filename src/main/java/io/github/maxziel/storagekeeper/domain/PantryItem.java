@@ -12,11 +12,12 @@ import java.util.Optional;
  * A product stored in the pantry.
  * Entity and aggregate root: it has an identity
  * ({@link PantryItemId}) and is compared by that identity only, while its state
- * (quantity) can change over time.
+ * (quantity) can change over time. It belongs to exactly one {@link Household}, which never changes.
  */
 public class PantryItem {
 
     private final PantryItemId pantryItemId;
+    private final HouseholdId householdId;
     private final ItemName itemName;
     private Quantity quantity;
     private final LocalDate expiryDate;
@@ -25,8 +26,9 @@ public class PantryItem {
     /** Events raised by changes since the item was loaded; collected by {@link #pullDomainEvents()}. */
     private final List<DomainEvent> domainEvents = new ArrayList<>();
 
-    public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId) {
-        this(pantryItemId, itemName, quantity, expiryDate, storageLocationId, BigDecimal.ZERO);
+    public PantryItem(PantryItemId pantryItemId, HouseholdId householdId, ItemName itemName, Quantity quantity,
+                      LocalDate expiryDate, StorageLocationId storageLocationId) {
+        this(pantryItemId, householdId, itemName, quantity, expiryDate, storageLocationId, BigDecimal.ZERO);
     }
 
     /**
@@ -34,9 +36,10 @@ public class PantryItem {
      *
      * @param minimumAmount minimum stock in the item's unit; 0 means "no minimum"
      */
-    public PantryItem(PantryItemId pantryItemId, ItemName itemName, Quantity quantity, LocalDate expiryDate,
-                      StorageLocationId storageLocationId, BigDecimal minimumAmount) {
+    public PantryItem(PantryItemId pantryItemId, HouseholdId householdId, ItemName itemName, Quantity quantity,
+                      LocalDate expiryDate, StorageLocationId storageLocationId, BigDecimal minimumAmount) {
         this.pantryItemId = Objects.requireNonNull(pantryItemId, "id must not be null");
+        this.householdId = Objects.requireNonNull(householdId, "household must not be null");
         this.itemName = Objects.requireNonNull(itemName, "name must not be null");
         this.quantity = Objects.requireNonNull(quantity, "quantity must not be null");
         this.expiryDate = expiryDate;
@@ -46,8 +49,9 @@ public class PantryItem {
     }
 
     /** Creates a new item with a freshly generated id. */
-    public static PantryItem create(ItemName itemName, Quantity quantity, LocalDate expiryDate, StorageLocationId storageLocationId) {
-        return new PantryItem(PantryItemId.newId(), itemName, quantity, expiryDate, storageLocationId);
+    public static PantryItem create(HouseholdId householdId, ItemName itemName, Quantity quantity, LocalDate expiryDate,
+                                    StorageLocationId storageLocationId) {
+        return new PantryItem(PantryItemId.newId(), householdId, itemName, quantity, expiryDate, storageLocationId);
     }
 
     /**
@@ -122,6 +126,15 @@ public class PantryItem {
 
     public PantryItemId getPantryItemId() {
         return pantryItemId;
+    }
+
+    public HouseholdId getHouseholdId() {
+        return householdId;
+    }
+
+    /** {@code true} if the item is part of this household's pantry. */
+    public boolean belongsTo(HouseholdId household) {
+        return householdId.equals(household);
     }
 
     public ItemName getItemName() {

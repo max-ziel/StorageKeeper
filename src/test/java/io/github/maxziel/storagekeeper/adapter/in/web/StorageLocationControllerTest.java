@@ -1,11 +1,12 @@
 package io.github.maxziel.storagekeeper.adapter.in.web;
 
+import io.github.maxziel.storagekeeper.application.NoHouseholdException;
 import io.github.maxziel.storagekeeper.application.StorageLocationAlreadyExistsException;
 import io.github.maxziel.storagekeeper.application.port.in.AddStorageLocationUseCase;
 import io.github.maxziel.storagekeeper.application.port.in.ListStorageLocationsUseCase;
+import io.github.maxziel.storagekeeper.domain.HouseholdId;
 import io.github.maxziel.storagekeeper.domain.LocationName;
 import io.github.maxziel.storagekeeper.domain.StorageLocation;
-import io.github.maxziel.storagekeeper.domain.StorageLocationId;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -21,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -28,6 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfiguration.class)
 @WithMockUser
 class StorageLocationControllerTest {
+
+    private static final HouseholdId HOUSEHOLD = HouseholdId.newId();
 
     @Autowired
     private MockMvc mockMvc;
@@ -38,7 +42,7 @@ class StorageLocationControllerTest {
 
     @Test
     void addReturnCreatedLocation() throws Exception {
-        StorageLocation cellar = StorageLocation.create(new LocationName("Keller"));
+        StorageLocation cellar = StorageLocation.create(HOUSEHOLD, new LocationName("Keller"));
 
         when(addStorageLocation.add(any())).thenReturn(cellar);
 
@@ -79,13 +83,23 @@ class StorageLocationControllerTest {
     @Test
     void listMarksDefaultLocation() throws Exception {
         when(listStorageLocations.listAll()).thenReturn(List.of(
-                StorageLocation.create(new LocationName("Keller")),
-                new StorageLocation(StorageLocationId.DEFAULT, new LocationName("Vorrat"))));
+                StorageLocation.create(HOUSEHOLD, new LocationName("Keller")),
+                StorageLocation.createDefault(HOUSEHOLD)));
 
         mockMvc.perform(get("/api/storage-locations"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].defaultLocation").value(false))
                 .andExpect(jsonPath("$[1].name").value("Vorrat"))
                 .andExpect(jsonPath("$[1].defaultLocation").value(true));
+    }
+
+    @Test
+    void userWithoutHouseholdGetsForbidden() throws Exception {
+        when(listStorageLocations.listAll()).thenThrow(new NoHouseholdException());
+
+        mockMvc.perform(get("/api/storage-locations"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Create or join a household first."));
     }
 }

@@ -1,5 +1,6 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
+import io.github.maxziel.storagekeeper.domain.HouseholdId;
 import io.github.maxziel.storagekeeper.domain.ItemName;
 import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntry;
 import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntryId;
@@ -24,6 +25,9 @@ class ManualShoppingListEntryJpaEntity {
     @Id
     private UUID id;
 
+    @Column(name = "household_id", nullable = false)
+    private UUID householdId;
+
     @Column(nullable = false, length = 100)
     private String name;
 
@@ -44,6 +48,7 @@ class ManualShoppingListEntryJpaEntity {
     static ManualShoppingListEntryJpaEntity fromDomain(ManualShoppingListEntry entry) {
         ManualShoppingListEntryJpaEntity entity = new ManualShoppingListEntryJpaEntity();
         entity.id = entry.getManualShoppingListEntryId().value();
+        entity.householdId = entry.getHouseholdId().value();
         entity.name = entry.getName().value();
         entity.amount = entry.getQuantity().map(Quantity::amount).orElse(null);
         entity.unit = entry.getQuantity().map(Quantity::unit).orElse(null);
@@ -54,6 +59,7 @@ class ManualShoppingListEntryJpaEntity {
     ManualShoppingListEntry toDomain() {
         return new ManualShoppingListEntry(
                 new ManualShoppingListEntryId(id),
+                new HouseholdId(householdId),
                 new ItemName(name),
                 amount == null ? null : new Quantity(amount, unit),
                 addedAt);

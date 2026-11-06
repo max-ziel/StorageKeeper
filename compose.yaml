@@ -7,8 +7,9 @@ services:
       POSTGRES_PASSWORD: storagekeeper
     ports:
       - "5432"
-# Issues the JWTs for local development (realm "storagekeeper" with the test users alice and bob).
-# Fixed port, because the issuer URL in the tokens must match storagekeeper's issuer-uri.
+
+  # Issues the JWTs for local development (realm "storagekeeper" with the test users alice, bob and carol).
+  # Fixed port, because the issuer URL in the tokens must match storagekeeper's issuer-uri.
   keycloak:
     image: keycloak/keycloak:26.4
     command: start-dev --import-realm
@@ -18,4 +19,4 @@ services:
     volumes:
       - ./dev/keycloak:/opt/keycloak/data/import:ro
     ports:
-        - "8180:8080"
+      - "8180:8080"
