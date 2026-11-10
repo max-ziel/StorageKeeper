@@ -28,11 +28,11 @@ public record InviteCode(String value) {
 
     public InviteCode {
         if (value == null) {
-            throw new IllegalArgumentException("invite code must not be null");
+            throw new DomainValidationException("invite code must not be null");
         }
         value = value.strip().toUpperCase(Locale.ROOT);
         if (!FORMAT.matcher(value).matches()) {
-            throw new IllegalArgumentException("invite code must look like XXXX-XXXX");
+            throw new DomainValidationException("invite code must look like XXXX-XXXX");
         }
     }
 

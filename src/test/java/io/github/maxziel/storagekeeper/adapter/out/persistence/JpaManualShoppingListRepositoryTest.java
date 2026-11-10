@@ -9,6 +9,7 @@ import io.github.maxziel.storagekeeper.domain.Quantity;
 import io.github.maxziel.storagekeeper.domain.Unit;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -19,6 +20,7 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Tag("integration")
 @DataJpaTest
 @Import({TestcontainersConfiguration.class, JpaManualShoppingListRepository.class})
 class JpaManualShoppingListRepositoryTest {

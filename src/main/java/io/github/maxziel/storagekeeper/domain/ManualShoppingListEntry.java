@@ -34,7 +34,7 @@ public class ManualShoppingListEntry {
         this.name = Objects.requireNonNull(name, "name must not be null");
         this.addedAt = Objects.requireNonNull(addedAt, "addedAt must not be null");
         if (quantity != null && quantity.amount().signum() <= 0) {
-            throw new IllegalArgumentException("quantity must be positive");
+            throw new DomainValidationException("quantity must be positive");
         }
         this.quantity = quantity;
     }

@@ -11,11 +11,11 @@ public record ItemName(String value) {
 
     public ItemName {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("name must not be blank");
+            throw new DomainValidationException("name must not be blank");
         }
         value = value.strip();
         if (value.length() > MAX_LENGTH) {
-            throw new IllegalArgumentException("name must be at most " + MAX_LENGTH + " characters");
+            throw new DomainValidationException("name must be at most " + MAX_LENGTH + " characters");
         }
     }
 }

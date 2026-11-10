@@ -84,12 +84,12 @@ public class PantryItem {
      * Adds a purchased amount to the stock, e.g. after shopping. Raises the same events as
      * {@link #changeQuantity(BigDecimal)}.
      *
-     * @throws IllegalArgumentException if the amount is not positive
+     * @throws DomainValidationException if the amount is not positive
      */
     public void restock(BigDecimal purchasedAmount) {
         Objects.requireNonNull(purchasedAmount, "purchased amount must not be null");
         if (purchasedAmount.signum() <= 0) {
-            throw new IllegalArgumentException("purchased amount must be positive");
+            throw new DomainValidationException("purchased amount must be positive");
         }
 
         changeQuantity(quantity.amount().add(purchasedAmount));

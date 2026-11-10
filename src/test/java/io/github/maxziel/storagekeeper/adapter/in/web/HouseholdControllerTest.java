@@ -25,8 +25,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(HouseholdController.class)
 @Import(SecurityConfiguration.class)
@@ -47,6 +46,19 @@ class HouseholdControllerTest {
 
     private final Household household =
             Household.found(new HouseholdName("WG Lindenstraße"), ALICE, new InviteCode("K7M2-QX9P"));
+
+    @Test
+    void createReturnsLocationHeader() throws Exception {
+        when(createHousehold.create(any())).thenReturn(household);
+
+        mockMvc.perform(post("/api/household")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "WG Lindenstraße"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/household"));
+    }
 
     @Test
     void createReturnsTheNewHouseholdWithInviteCode() throws Exception {

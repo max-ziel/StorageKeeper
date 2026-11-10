@@ -1,7 +1,8 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M7 Teil 1 (Aufräumen nach dem Audit: Doku an den Code angeglichen, Transaktionsregel, Build und CI);
+Stand: M7 Teil 2 (Fehlerbehandlung: `DomainValidationException`, Konflikte paralleler Requests als `409`, Programmfehler
+als `500` ohne interne Details; Teil 1: Doku an den Code angeglichen, Transaktionsregel, Build und CI);
 davor M6 (Betrieb: Container-Image und Deployment mit Docker Compose, Health-Probes, Metriken mit Prometheus und
 strukturiertes Logging; Haushalte: jeder
 Nutzer sieht nur den Vorrat seines Haushalts; API nur mit JWT erreichbar; Einkaufsliste mit Vorratseinkäufen über
@@ -191,6 +192,12 @@ classDiagram
     PantryItemFellBelowMinimum ..|> DomainEvent
     PantryItemReachedMinimum ..|> DomainEvent
     PantryItem ..> DomainEvent : erzeugt
+
+    class DomainValidationException {
+        <<exception>>
+    }
+    class IllegalArgumentException
+    DomainValidationException --|> IllegalArgumentException
 ```
 
 ## Klassen im Detail
@@ -368,6 +375,15 @@ Eine Gruppe von Nutzern, die einen Vorrat teilen: Artikel, Lagerorte und Einkauf
   möglichen, also etwa 10¹² Codes; erraten ist praktisch ausgeschlossen. `LENGTH` (9, mit Bindestrich) nutzt
   auch die Spalte `household.invite_code`. Verwechselbare Zeichen fehlen, damit man den Code auch
   vorlesen oder abtippen kann.
+
+### `DomainValidationException` – Exception
+
+Alle Prüfungen der Value Objects und Entities (z. B. „Name nicht leer“, „Menge nicht negativ“) werfen
+`DomainValidationException`. Sie erweitert `IllegalArgumentException`, die Meldung ist für den Client geschrieben.
+Der Web-Adapter macht daraus `400`; jede andere `IllegalArgumentException` gilt als Programmfehler (`500`), damit keine
+internen Texte aus Bibliotheken beim Client landen. Auch die Application nutzt sie für Eingaberegeln
+(`PageQuery`, `days` bei `/expiring`). Fehlende Pflichtwerte (`null`) bleiben `NullPointerException` aus
+`Objects.requireNonNull`: Die Adapter prüfen sie vorher, im Code wären sie ein Programmfehler.
 
 ### Domain-Events
 
@@ -897,7 +913,7 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Ursache                                                                 | HTTP-Status |
 |-------------------------------------------------------------------------|-------------|
 | Ungültiger Request (Bean Validation, unbekannte `unit`, kaputtes JSON)  | 400         |
-| Domain-Regel verletzt (`IllegalArgumentException`)                      | 400         |
+| Domain-Regel verletzt (`DomainValidationException`)                     | 400         |
 | Artikel-ID unbekannt (`PantryItemNotFoundException`)                    | 404         |
 | Lagerort im Request unbekannt (`StorageLocationNotFoundException`)      | 400         |
 | Lagerort-Name existiert schon (`StorageLocationAlreadyExistsException`) | 409         |
@@ -906,6 +922,22 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Nutzer ohne Haushalt (`NoHouseholdException`)                           | 403         |
 | Schon Mitglied eines Haushalts (`AlreadyInHouseholdException`)          | 409         |
 | Einladungscode unbekannt (`UnknownInviteCodeException`)                 | 400         |
+| DB-Constraint verletzt (`DataIntegrityViolationException`)              | 409         |
+| alles andere, z. B. `IllegalStateException` (Programmfehler)            | 500         |
+
+`ApiExceptionHandler` erweitert Springs `ResponseEntityExceptionHandler`. Dieser beantwortet die Fehler von Spring MVC
+selbst (kaputtes JSON, Bean Validation, unbekannter Pfad, falsche Methode) mit dem passenden Status; ohne ihn würde
+der Auffang-Handler für `Exception` auch diese zu `500` machen.
+
+**Parallele Requests:** Die Services prüfen Eindeutigkeit vorher (Lagerort-Name, „schon in einem Haushalt“), damit der
+Client eine genaue Meldung bekommt. Zwischen Prüfung und Einfügen liegt aber eine Lücke: Zwei gleichzeitige Requests
+können beide die Prüfung bestehen. Dann lehnt die Datenbank den zweiten ab (`uq_storage_location_household_name`,
+Primärschlüssel von `household_member`, `UNIQUE invite_code`), und der Client bekommt `409` mit einer allgemeinen
+Meldung („Please reload and try again“). Die Datenbank-Meldung nennt Tabellen und Spalten, deshalb steht sie nur im
+Log (`WARN`). `ConcurrentRequestsIntegrationTest` erzwingt diese Lücke mit einer `CyclicBarrier` im Repository-Spy.
+
+**Programmfehler** (`500`) werden mit Stacktrace als `ERROR` geloggt; der Client bekommt nur
+„An unexpected error occurred.“
 
 Artikel, Lagerorte und Einträge eines anderen Haushalts behandeln die Services wie unbekannte IDs
 (`404`, beim Lagerort im Request `400`).

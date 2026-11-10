@@ -17,7 +17,7 @@ erreichbar, z. B. hinter einem Firmen-Proxy, ein lokal installiertes JDK angeben
 `./gradlew build -Dorg.gradle.java.installations.paths=/pfad/zum/jdk-25`.
 
 ```bash
-./gradlew build      # kompiliert, testet (inkl. Architekturregeln und Tests gegen PostgreSQL per Testcontainers)
+./gradlew build      # kompiliert, testet (inkl. Architekturregeln und Tests gegen PostgreSQL per Testcontainers), prüft die Abdeckung
 ./gradlew bootRun    # startet PostgreSQL und Keycloak per Docker Compose (compose.yaml) und die App auf http://localhost:8080
 curl localhost:8081/actuator/health
 ```
@@ -69,7 +69,7 @@ Die Dokumentation wird von springdoc aus den Controllern erzeugt und ist daher i
 
 | Methode | Pfad                  | Body             | Antwort                                                      |
 |---------|-----------------------|------------------|--------------------------------------------------------------|
-| `POST`  | `/api/household`      | `{"name"}`       | `201` + Haushalt; `409` wenn man schon in einem Haushalt ist |
+| `POST`  | `/api/household`      | `{"name"}`       | `201` + `Location`-Header + Haushalt; `409` wenn man schon in einem Haushalt ist |
 | `GET`   | `/api/household`      | –                | `200` + eigener Haushalt; `403` ohne Haushalt                |
 | `POST`  | `/api/household/join` | `{"inviteCode"}` | `200` + Haushalt; `400` bei unbekanntem Code, `409` wie oben |
 
@@ -101,7 +101,7 @@ Reihenfolge, in der sie beigetreten sind. Beim Code ist Groß-/Kleinschreibung e
 |----------|-----------------------------------------------------|--------------------------------|-------------------------------------------------------------|
 | `GET`    | `/api/shopping-list`                                | –                              | `200` + `{"stockPurchases": [...], "manualEntries": [...]}` |
 | `POST`   | `/api/shopping-list/stock-purchases/{id}/check-off` | `{"amount"}` (> 0)             | `200` + Artikel mit neuem Bestand                           |
-| `POST`   | `/api/shopping-list/manual-entries`                 | `{"name", "amount"?, "unit"?}` | `201` + Eintrag                                             |
+| `POST`   | `/api/shopping-list/manual-entries`                 | `{"name", "amount"?, "unit"?}` | `201` + `Location`-Header + Eintrag                         |
 | `DELETE` | `/api/shopping-list/manual-entries/{id}`            | –                              | `204`                                                       |
 
 Die Liste hat zwei Abschnitte, beide älteste zuerst:
@@ -117,14 +117,17 @@ Die Liste hat zwei Abschnitte, beide älteste zuerst:
 
 | Methode | Pfad                     | Body       | Antwort                                         |
 |---------|--------------------------|------------|-------------------------------------------------|
-| `POST`  | `/api/storage-locations` | `{"name"}` | `201` + Lagerort; `409` wenn der Name existiert |
+| `POST`  | `/api/storage-locations` | `{"name"}` | `201` + `Location`-Header + Lagerort; `409` wenn der Name existiert |
 | `GET`   | `/api/storage-locations` | –          | `200` + Liste, sortiert nach Name               |
 
 Jeder Haushalt hat genau einen Basis-Lagerort „Vorrat“; er ist in der Liste mit `"defaultLocation": true` markiert.
 Namen müssen nur innerhalb eines Haushalts eindeutig sein.
 
 Fehler kommen als `application/problem+json` (`400` bei ungültigen Eingaben oder unbekanntem Lagerort,
-`403` ohne Haushalt, `404` bei unbekannter Artikel- oder Eintrags-ID, `409` bei doppeltem Lagerort-Namen).
+`403` ohne Haushalt, `404` bei unbekannter Artikel- oder Eintrags-ID, `409` bei doppeltem Lagerort-Namen oder wenn
+zwei gleichzeitige Requests kollidieren, `500` mit allgemeiner Meldung bei einem Programmfehler).
+Der `Location`-Header einer `201`-Antwort nennt die URL des neuen Objekts; einen `GET` auf einzelne Objekte gibt es
+bisher nur für den Haushalt.
 Artikel und Einträge eines anderen Haushalts gelten als unbekannt (`404`), damit niemand fremde IDs ausprobieren kann.
 Ein fehlendes oder ungültiges Token ergibt `401`, ebenfalls als `problem+json`; der Header `WWW-Authenticate` nennt zusätzlich den Grund.
 
@@ -306,6 +309,26 @@ Hinweise:
   Traefik); `KEYCLOAK_URL` ist dann die `https://`-Adresse.
 - **Stoppen:** `docker compose down` behält die Daten, `docker compose down -v` löscht sie.
 
+## Tests
+
+```bash
+./gradlew test       # alle Tests (braucht Docker)
+./gradlew unitTest   # nur die Tests ohne Docker, in wenigen Sekunden
+./gradlew check      # alle Tests plus Prüfung der Abdeckung (mindestens 90 % Zeilen, 75 % Branches)
+```
+
+| Art                 | Werkzeug                                    | Beispiele                                                       |
+|---------------------|---------------------------------------------|-----------------------------------------------------------------|
+| Domain              | JUnit, AssertJ                              | `PantryItemTest`, `QuantityTest`, `InviteCodeTest`              |
+| Application         | Mockito statt Repositories, feste `Clock`   | `PantryItemServiceTest`, `HouseholdServiceTest`                 |
+| Web                 | `@WebMvcTest` mit echter `SecurityConfiguration` | `PantryItemControllerTest`, `StorageLocationControllerTest` |
+| Persistenz          | `@DataJpaTest` gegen PostgreSQL (Testcontainers) | `JpaPantryItemRepositoryTest`, `HouseholdMigrationTest`     |
+| Ende zu Ende        | `@SpringBootTest` gegen PostgreSQL          | `HouseholdIsolationIntegrationTest`, `ConcurrentRequestsIntegrationTest` |
+| Architektur         | ArchUnit                                    | `ArchitectureTest`                                              |
+
+Tests mit Spring-Kontext und PostgreSQL tragen `@Tag("integration")`; `unitTest` lässt genau diese weg. Der
+Abdeckungsbericht liegt nach `./gradlew test jacocoTestReport` unter `build/reports/jacoco/test/html/index.html`.
+
 ## Paketstruktur
 
 ```
@@ -326,3 +349,14 @@ io.github.maxziel.storagekeeper
 
 `ArchitectureTest` (ArchUnit) erzwingt die Abhängigkeitsrichtung: Adapter → Application → Domain, nie umgekehrt.
 Die Application nutzt von Spring nur `@Service`/`@Component` und `@Transactional`; die Domain kennt kein Framework.
+
+## Mitwirken
+
+Jeder Milestone entsteht auf einem eigenen Branch und kommt per Pull Request nach `main`, sobald die CI grün ist.
+Commit-Nachrichten haben die Form `M<n> (<teil>/<gesamt>): <Zusammenfassung>`. Schemaänderungen nur als neue
+Flyway-Migration; das Paket `domain` bleibt frei von Spring und Jakarta (prüft `ArchitectureTest`).
+Fehler und Vorschläge bitte als GitHub-Issue.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE).

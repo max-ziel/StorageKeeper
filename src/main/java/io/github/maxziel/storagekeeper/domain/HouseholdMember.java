@@ -15,11 +15,11 @@ public record HouseholdMember(UserId userId, String name) {
     public HouseholdMember {
         Objects.requireNonNull(userId, "user id must not be null");
         if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("member name must not be blank");
+            throw new DomainValidationException("member name must not be blank");
         }
         name = name.strip();
         if (name.length() > MAX_NAME_LENGTH) {
-            throw new IllegalArgumentException("member name must be at most " + MAX_NAME_LENGTH + " characters");
+            throw new DomainValidationException("member name must be at most " + MAX_NAME_LENGTH + " characters");
         }
     }
 }

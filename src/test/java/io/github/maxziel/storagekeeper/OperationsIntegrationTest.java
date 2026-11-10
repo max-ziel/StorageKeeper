@@ -5,6 +5,7 @@ import io.github.maxziel.storagekeeper.domain.PantryItemId;
 import io.github.maxziel.storagekeeper.domain.PantryItemReachedMinimum;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +32,7 @@ import static org.mockito.Mockito.when;
  * Runs the application with real HTTP ports, as in operation: the API on the main port and the actuator on the
  * separate management port. The JWT decoder is mocked, so no Keycloak is needed.
  */
+@Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(TestcontainersConfiguration.class)
 class OperationsIntegrationTest {

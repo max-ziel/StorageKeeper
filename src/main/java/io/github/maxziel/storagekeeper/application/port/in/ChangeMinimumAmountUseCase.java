@@ -11,7 +11,7 @@ public interface ChangeMinimumAmountUseCase {
     /**
      * @param newMinimumAmount 0 = no minimum
      * @throws io.github.maxziel.storagekeeper.application.PantryItemNotFoundException if no item has this id
-     * @throws IllegalArgumentException if the amount is negative
+     * @throws io.github.maxziel.storagekeeper.domain.DomainValidationException if the amount is negative
      */
     PantryItem changeMinimumAmount(PantryItemId pantryItemId, BigDecimal newMinimumAmount);
 }

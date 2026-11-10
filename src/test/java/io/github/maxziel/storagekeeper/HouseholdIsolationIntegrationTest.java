@@ -2,6 +2,7 @@ package io.github.maxziel.storagekeeper;
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ({@code sub} = user id, {@code preferred_username} = name) and the whole application against PostgreSQL.
  * Each test uses new users, so the tests do not depend on each other.
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)

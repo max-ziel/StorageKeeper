@@ -1,5 +1,6 @@
 package io.github.maxziel.storagekeeper;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code jwt()} puts an already validated token into the request, so no Keycloak is needed here; for tokens sent
  * in the header, the decoder is mocked.
  */
+@Tag("integration")
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)

@@ -79,9 +79,45 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
+// Quick feedback without Docker: all tests except those tagged "integration" (Spring context, PostgreSQL via
+// Testcontainers). ./gradlew test and ./gradlew build still run all of them.
+val unitTest by tasks.registering(Test::class) {
+    description = "Runs the tests that need no Docker."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform {
+        excludeTags("integration")
+    }
+}
+
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
     reports {
         xml.required = true
     }
+}
+
+// The build fails if the coverage of all tests drops below these values (today about 98 % lines, 83 % branches).
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                minimum = "0.90".toBigDecimal()
+            }
+            limit {
+                counter = "BRANCH"
+                minimum = "0.75".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }

@@ -1,10 +1,7 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
 import org.flywaydb.core.Flyway;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.sql.Connection;
@@ -22,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * migrated to the latest version. Uses its own database, because the other tests always start from the latest
  * schema.
  */
+@Tag("integration")
 class HouseholdMigrationTest {
 
     private static final String OLD_DEFAULT_LOCATION = "00000000-0000-0000-0000-000000000001";

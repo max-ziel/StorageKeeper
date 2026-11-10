@@ -15,7 +15,7 @@ public record Quantity(BigDecimal amount, Unit unit) {
         Objects.requireNonNull(amount, "amount must not be null");
         Objects.requireNonNull(unit, "unit must not be null");
         if (amount.signum() < 0) {
-            throw new IllegalArgumentException("amount must not be negative");
+            throw new DomainValidationException("amount must not be negative");
         }
     }
 

@@ -36,7 +36,7 @@ und die ArchUnit-Regeln bleiben bestehen.
   veraltete Milestone-Bezüge, Paketstruktur), Javadoc und Tippfehler, Transaktionsregel für Use Cases,
   `ShoppingListEntryJpaEntity` in eigener Datei, Konstanten statt Magic Numbers, CI baut `build` und läuft je
   Änderung nur einmal, Qodana mit JDK 25; `/expiring` liefert jetzt auch `minimumAmount` und `belowMinimum`
-- [ ] Teil 2: Fehlerbehandlung: Constraint-Verletzungen bei parallelen Requests als `409`, eigene
+- [x] Teil 2: Fehlerbehandlung: Constraint-Verletzungen bei parallelen Requests als `409`, eigene
   Validierungs-Exception statt jeder `IllegalArgumentException`, einheitliche `Location`-Header, Coverage-Schwelle,
   Integrationstests getrennt lauffähig, README-Abschnitte „Tests“, „Lizenz“, „Mitwirken“
 - [ ] Teil 3: Betrieb und Sicherheit: Produktions-Realm ohne Testnutzer, eigener DB-Nutzer für Keycloak,

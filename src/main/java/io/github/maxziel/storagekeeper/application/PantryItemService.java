@@ -6,10 +6,7 @@ import io.github.maxziel.storagekeeper.application.port.in.*;
 import io.github.maxziel.storagekeeper.application.port.out.DomainEventPublisher;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 import io.github.maxziel.storagekeeper.application.port.out.StorageLocationRepository;
-import io.github.maxziel.storagekeeper.domain.HouseholdId;
-import io.github.maxziel.storagekeeper.domain.PantryItem;
-import io.github.maxziel.storagekeeper.domain.PantryItemId;
-import io.github.maxziel.storagekeeper.domain.StorageLocationId;
+import io.github.maxziel.storagekeeper.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,7 +80,7 @@ public class PantryItemService implements
     @Transactional(readOnly = true)
     public List<ExpiringPantryItem> listExpiringWithin(int days) {
         if (days < 0) {
-            throw new IllegalArgumentException("days must not be negative");
+            throw new DomainValidationException("days must not be negative");
         }
         HouseholdId household = currentHousehold.require();
         LocalDate today = LocalDate.now(clock);

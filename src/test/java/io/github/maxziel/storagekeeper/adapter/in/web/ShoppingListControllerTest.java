@@ -20,8 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ShoppingListController.class)
 @Import(SecurityConfiguration.class)
@@ -108,6 +107,21 @@ class ShoppingListControllerTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void addManualEntryReturnsLocationHeader() throws Exception {
+        ManualShoppingListEntry candles = ManualShoppingListEntry.create(HOUSEHOLD, new ItemName("Kerzen"), null, NOW);
+        when(addManualEntry.add(any(), isNull())).thenReturn(candles);
+
+        mockMvc.perform(post("/api/shopping-list/manual-entries")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Kerzen"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location",
+                        "/api/shopping-list/manual-entries/" + candles.getManualShoppingListEntryId()));
+    }
+    
     @Test
     void addManualEntryWithAmount() throws Exception {
         Quantity twelve = new Quantity(new BigDecimal("12"), Unit.PIECE);

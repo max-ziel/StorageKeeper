@@ -13,10 +13,10 @@ public record UserId(String value) {
 
     public UserId {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("user id must not be blank");
+            throw new DomainValidationException("user id must not be blank");
         }
         if (value.length() > MAX_LENGTH) {
-            throw new IllegalArgumentException("user id must be at most " + MAX_LENGTH + " characters");
+            throw new DomainValidationException("user id must be at most " + MAX_LENGTH + " characters");
         }
     }
 

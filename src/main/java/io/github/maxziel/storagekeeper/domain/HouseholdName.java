@@ -11,11 +11,11 @@ public record HouseholdName(String value) {
 
     public HouseholdName {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("household name must not be blank");
+            throw new DomainValidationException("household name must not be blank");
         }
         value = value.strip();
         if (value.length() > MAX_LENGTH) {
-            throw new IllegalArgumentException("household name must be at most " + MAX_LENGTH + " characters");
+            throw new DomainValidationException("household name must be at most " + MAX_LENGTH + " characters");
         }
     }
 }

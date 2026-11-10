@@ -5,13 +5,10 @@ import io.github.maxziel.storagekeeper.application.port.in.JoinHouseholdUseCase;
 import io.github.maxziel.storagekeeper.application.port.in.ShowHouseholdUseCase;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.net.URI;
 
 /**
  * REST endpoints for the current user's household. Singular path: a user is in at most one household,
@@ -33,10 +30,11 @@ class HouseholdController {
         this.joinHousehold = joinHousehold;
     }
 
+    /** The household has no id in the URL (see class comment), so the {@code Location} is the singular path. */
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    HouseholdResponse create(@Valid @RequestBody CreateHouseholdRequest request) {
-        return HouseholdResponse.from(createHousehold.create(request.toHouseholdName()));
+    ResponseEntity<HouseholdResponse> create(@Valid @RequestBody CreateHouseholdRequest request) {
+        HouseholdResponse household = HouseholdResponse.from(createHousehold.create(request.toHouseholdName()));
+        return ResponseEntity.created(URI.create("/api/household")).body(household);
     }
 
     @GetMapping

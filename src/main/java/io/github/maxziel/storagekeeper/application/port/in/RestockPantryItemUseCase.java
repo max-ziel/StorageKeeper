@@ -12,7 +12,7 @@ public interface RestockPantryItemUseCase {
 
     /**
      * @throws io.github.maxziel.storagekeeper.application.PantryItemNotFoundException if no item has this id
-     * @throws IllegalArgumentException if the amount is not positive
+     * @throws io.github.maxziel.storagekeeper.domain.DomainValidationException if the amount is not positive
      */
     PantryItem restock(PantryItemId pantryItemId, BigDecimal purchasedAmount);
 }

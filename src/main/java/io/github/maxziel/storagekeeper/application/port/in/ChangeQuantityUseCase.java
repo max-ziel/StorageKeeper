@@ -10,7 +10,7 @@ public interface ChangeQuantityUseCase {
 
     /**
      * @throws io.github.maxziel.storagekeeper.application.PantryItemNotFoundException if no item has this id
-     * @throws IllegalArgumentException if the new amount is negative
+     * @throws io.github.maxziel.storagekeeper.domain.DomainValidationException if the new amount is negative
      */
     PantryItem changeQuantity(PantryItemId pantryItemId, BigDecimal newAmount);
 }
