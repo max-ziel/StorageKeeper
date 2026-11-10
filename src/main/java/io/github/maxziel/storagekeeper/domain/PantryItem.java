@@ -55,7 +55,7 @@ public class PantryItem {
     }
 
     /**
-     * Sets hte minimum stock in the item's unit. 0 means "no minimum".
+     * Sets the minimum stock in the item's unit. 0 means "no minimum".
      *
      * @throws IllegalArgumentException if the amount is negative
      */
@@ -67,7 +67,6 @@ public class PantryItem {
     }
 
     /**
-     *
      * @return {@code true} if the current amount is below the minimum stock, i.e. the item should be bought.
      */
     public boolean isBelowMinimum() {

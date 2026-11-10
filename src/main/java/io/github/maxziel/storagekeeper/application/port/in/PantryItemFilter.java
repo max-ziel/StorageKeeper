@@ -12,6 +12,6 @@ public record PantryItemFilter(StorageLocationId storageLocationId, boolean only
 
     /** No restriction: all items */
     public static PantryItemFilter none() {
-        return  new PantryItemFilter(null, false);
+        return new PantryItemFilter(null, false);
     }
 }

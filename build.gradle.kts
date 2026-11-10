@@ -3,7 +3,6 @@ plugins {
     jacoco
     id("org.springframework.boot") version "4.1.1"
     id("io.spring.dependency-management") version "1.1.7"
-    id("io.swagger.core.v3.swagger-gradle-plugin") version "3.0.0"
 }
 
 group = "io.github.maxziel"
@@ -69,6 +68,11 @@ tasks.bootBuildImage {
     }
 }
 
+/*
+Spring Boot 4 itself uses Jackson 3; Jackson 2 is only pulled in by springdoc-openapi, which asks for 2.21.7.
+This raises it to the patch release 2.21.8. Check on every Spring Boot or springdoc upgrade
+(./gradlew dependencyInsight --dependency com.fasterxml.jackson.core) and remove the line once it is no longer higher.
+*/
 extra["jackson-2-bom.version"] = "2.21.8"
 
 tasks.withType<Test> {

@@ -21,6 +21,7 @@ und die ArchUnit-Regeln bleiben bestehen.
 | M4 ✅ | Einkaufsliste      | Liste entsteht automatisch, wenn der Mindestbestand unterschritten wird; ein abgehakter Eintrag erhöht den Bestand | Domain-Events (als Spring `ApplicationEvent`s im Adapter), transaktionale Use Cases                                                                      |
 | M5 ✅ | API & Sicherheit   | Mehrere Haushalte/Nutzer, jeder sieht nur seinen Vorrat                                                            | springdoc-OpenAPI, Spring Security mit JWT (OAuth2 Resource Server), Autorisierung im Application-Layer                                                  |
 | M6 ✅ | Betrieb            | –                                                                                                                  | Docker-Image (Buildpacks via `bootBuildImage`), Actuator-Metriken, strukturiertes Logging, Deployment mit Docker Compose                                 |
+| M7    | Audit-Nacharbeiten | – (bis auf Kleinigkeiten gleiches Verhalten)                                                                       | Befunde aus dem Code-Audit: Doku ↔ Code, Build und CI, Fehlerbehandlung, Härtung des Deployments                                                       |
 
 ### M6 im Detail
 
@@ -28,6 +29,18 @@ und die ArchUnit-Regeln bleiben bestehen.
   Event-Zähler, strukturiertes Logging (ECS) mit Nutzer-ID
 - [x] Teil 2: Docker-Image per `bootBuildImage`, Veröffentlichung in der GitHub Container Registry durch die CI,
   Deployment mit Docker Compose (`deploy/`: App, PostgreSQL, Keycloak, optional Prometheus)
+
+### M7 im Detail
+
+- [x] Teil 1: Aufräumen ohne Verhaltensänderung: Doku an den Code angeglichen (Schichten, Request-Ablauf,
+  veraltete Milestone-Bezüge, Paketstruktur), Javadoc und Tippfehler, Transaktionsregel für Use Cases,
+  `ShoppingListEntryJpaEntity` in eigener Datei, Konstanten statt Magic Numbers, CI baut `build` und läuft je
+  Änderung nur einmal, Qodana mit JDK 25; `/expiring` liefert jetzt auch `minimumAmount` und `belowMinimum`
+- [ ] Teil 2: Fehlerbehandlung: Constraint-Verletzungen bei parallelen Requests als `409`, eigene
+  Validierungs-Exception statt jeder `IllegalArgumentException`, einheitliche `Location`-Header, Coverage-Schwelle,
+  Integrationstests getrennt lauffähig, README-Abschnitte „Tests“, „Lizenz“, „Mitwirken“
+- [ ] Teil 3: Betrieb und Sicherheit: Produktions-Realm ohne Testnutzer, eigener DB-Nutzer für Keycloak,
+  Swagger UI abschaltbar, Versionen und Tags, Dependabot, `SECURITY.md`, ArchUnit-Regeln für Application und Event-Port
 
 ### Optional danach
 

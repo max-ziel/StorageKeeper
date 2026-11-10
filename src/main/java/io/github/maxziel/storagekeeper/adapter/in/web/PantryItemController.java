@@ -57,7 +57,7 @@ class PantryItemController {
     }
 
     /**
-     * One page of items, sorted by nema. All filters are optional and combined with AND.
+     * One page of items, sorted by name. All filters are optional and combined with AND.
      *
      * @param storageLocationId only items in this location
      * @param belowMinimum {@code true} = only items below their minimum

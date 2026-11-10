@@ -7,6 +7,10 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Clock;
 import java.time.ZoneId;
 
+/**
+ * Provides the {@link Clock} that the application asks for "now" and "today". The time zone
+ * ({@code storagekeeper.time-zone}) decides when a new day begins; tests pass a fixed clock instead.
+ */
 @Configuration
 class ClockConfiguration {
 

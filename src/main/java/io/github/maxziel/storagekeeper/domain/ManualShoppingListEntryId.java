@@ -4,7 +4,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Identity of a {@link ManualShoppingListEntry}
+ * Identity of a {@link ManualShoppingListEntry}.
+ *
+ * @param value the UUID, never {@code null}
  */
 public record ManualShoppingListEntryId(UUID value) {
 

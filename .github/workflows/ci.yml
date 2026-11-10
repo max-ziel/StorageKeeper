@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # Branches are built through their pull request; a push only triggers a build on main.
   push:
+    branches: [ main ]
   pull_request:
 
 jobs:

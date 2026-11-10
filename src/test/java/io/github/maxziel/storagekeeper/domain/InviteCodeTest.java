@@ -22,6 +22,11 @@ class InviteCodeTest {
     }
 
     @Test
+    void generatedCodesHaveTheDeclaredLength() {
+        assertThat(InviteCode.generate().value()).hasSize(InviteCode.LENGTH);
+    }
+
+    @Test
     void generatedCodesDiffer() {
         Set<InviteCode> codes = new HashSet<>();
         for (int i = 0; i < 1000; i++) {

@@ -21,7 +21,7 @@ public record ResultPage<T>(List<T> content, int page, int size, long totalEleme
     }
 
     /** Converts the entries, e.g. from domain objects to JSON responses; the paging data stays the same. */
-    public <R> ResultPage<R> map(Function<T,R> mapper) {
+    public <R> ResultPage<R> map(Function<T, R> mapper) {
         return new ResultPage<>(content.stream().map(mapper).toList(), page, size, totalElements);
     }
 }

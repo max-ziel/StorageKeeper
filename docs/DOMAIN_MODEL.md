@@ -1,7 +1,8 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M6 (Betrieb: Container-Image und Deployment mit Docker Compose, Health-Probes, Metriken mit Prometheus und
+Stand: M7 Teil 1 (Aufräumen nach dem Audit: Doku an den Code angeglichen, Transaktionsregel, Build und CI);
+davor M6 (Betrieb: Container-Image und Deployment mit Docker Compose, Health-Probes, Metriken mit Prometheus und
 strukturiertes Logging; Haushalte: jeder
 Nutzer sieht nur den Vorrat seines Haushalts; API nur mit JWT erreichbar; Einkaufsliste mit Vorratseinkäufen über
 Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL).
@@ -127,6 +128,8 @@ classDiagram
     }
 
     class InviteCode {
+        +int GROUP_SIZE$
+        +int LENGTH$
         +String value
         +generate()$ InviteCode
     }
@@ -207,7 +210,7 @@ Ein Produkt im Vorrat, z. B. „1 kg Reis, haltbar bis 01.03.2027“.
 | `minimumAmount`     | `BigDecimal`        | ja      | Mindestbestand in der Einheit des Artikels, ≥ 0; `0` = kein Mindestbestand (Standard) |
 
 - **Anlegen:** `PantryItem.create(...)` erzeugt eine neue ID. Der öffentliche Konstruktor ist für das
-  Wiederherstellen eines vorhandenen Artikels mit bekannter ID gedacht (z. B. später aus der Datenbank).
+  Wiederherstellen eines vorhandenen Artikels mit bekannter ID gedacht (z. B. beim Laden aus der Datenbank).
 - **Ändern:** `changeQuantity(newAmount)` setzt eine neue Menge; die Einheit bleibt gleich.
   Eine negative Menge wird von `Quantity` abgelehnt.
 - **Auffüllen:** `restock(purchasedAmount)` addiert eine gekaufte Menge zum Bestand (muss > 0 sein).
@@ -229,7 +232,7 @@ Ein Produkt im Vorrat, z. B. „1 kg Reis, haltbar bis 01.03.2027“.
 ### `PantryItemId` – Value Object
 
 Kapselt eine `UUID`. Ein eigener Typ statt einer nackten `UUID` verhindert, dass IDs verschiedener
-Entities verwechselt werden, sobald es weitere gibt (z. B. Lagerorte in M3).
+Entities verwechselt werden, z. B. eine `PantryItemId` mit einer `StorageLocationId`.
 
 | Feld    | Typ    | Regel        |
 |---------|--------|--------------|
@@ -320,6 +323,8 @@ Etwas, das der Nutzer selbst auf die Liste schreibt, z. B. „Geburtstagskerzen�
 | `quantity`                  | `Quantity`                  | nein    | `null` = ohne Mengenangabe; wenn gesetzt, > 0 |
 | `addedAt`                   | `Instant`                   | ja      | Zeitpunkt, an dem der Eintrag entstand        |
 
+- **Gleichheit:** nur über `manualShoppingListEntryId`, wie bei allen Entities per `instanceof`.
+
 **Warum eine eigene Klasse statt `ShoppingListEntry` mit optionalem Artikel?** Die beiden verhalten sich
 verschieden: Ein Vorratseinkauf entsteht und verschwindet automatisch und ändert beim Abhaken den Bestand,
 ein manueller Eintrag wird vom Nutzer angelegt und beim Abhaken einfach gelöscht. Mit einer Klasse bräuchte
@@ -359,8 +364,9 @@ Eine Gruppe von Nutzern, die einen Vorrat teilen: Artikel, Lagerorte und Einkauf
 
 - **Warum `sub` und nicht der Benutzername?** Den Benutzernamen kann man in Keycloak ändern; `sub` bleibt gleich.
   Nutzer werden nur im Identity Provider verwaltet, die App speichert nur, wer in welchem Haushalt ist.
-- **Einladungscode:** `InviteCode.generate()` zieht 8 Zeichen mit `SecureRandom` aus 32 möglichen, also etwa
-  10¹² Codes; erraten ist praktisch ausgeschlossen. Verwechselbare Zeichen fehlen, damit man den Code auch
+- **Einladungscode:** `InviteCode.generate()` zieht 2 × `GROUP_SIZE` = 8 Zeichen mit `SecureRandom` aus 32
+  möglichen, also etwa 10¹² Codes; erraten ist praktisch ausgeschlossen. `LENGTH` (9, mit Bindestrich) nutzt
+  auch die Spalte `household.invite_code`. Verwechselbare Zeichen fehlen, damit man den Code auch
   vorlesen oder abtippen kann.
 
 ### Domain-Events
@@ -426,8 +432,8 @@ sequenceDiagram
 
 **Warum Events statt eines direkten Aufrufs?** `PantryItemService` müsste sonst die Einkaufsliste kennen und
 bei jeder Mengenänderung selbst entscheiden, ob dort etwas zu tun ist. Mit Events meldet der Artikel nur
-„ich bin unter Minimum“, und wer sich dafür interessiert, reagiert. In M5/M6 können weitere Reaktionen
-(z. B. eine Benachrichtigung) dazukommen, ohne den bestehenden Code anzufassen.
+„ich bin unter Minimum“, und wer sich dafür interessiert, reagiert. So kam in M6 der Metrik-Zähler
+(`DomainEventMetrics`) dazu, ohne den Service anzufassen; eine Benachrichtigung ginge genauso.
 
 **Wie die Teile zusammenhängen:**
 
@@ -438,8 +444,16 @@ bei jeder Mengenänderung selbst entscheiden, ob dort etwas zu tun ist. Mit Even
   Er übersetzt nur und enthält keine Regeln.
 - `ShoppingListService` legt Einträge an (nur, wenn noch keiner existiert) und entfernt sie.
 
-**Transaktionen:** `PantryItemService.add`, `changeQuantity` und `changeMinimumAmount` sind `@Transactional`.
-Spring ruft die Listener synchron im selben Thread auf, deshalb laufen Änderung am Artikel und Änderung an der
+**Transaktionen:** Die Grenze setzt immer der Use Case, also die öffentliche Methode des Services:
+
+| Art der Methode    | Annotation                                                        | Beispiele                                                                                      |
+|--------------------|-------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| ändernder Use Case | `@Transactional`                                                  | `PantryItemService.changeQuantity`, `StorageLocationService.add`, `HouseholdService.join`      |
+| lesender Use Case  | `@Transactional(readOnly = true)`                                 | `PantryItemService.search`, `StorageLocationService.listAll`, `ShoppingListService.getShoppingList` |
+| Repository-Adapter | nur, wo mehrere Statements zusammengehören oder Spring Data es verlangt | `JpaPantryItemRepository.deleteById`, `JpaShoppingListRepository.deleteByPantryItemId`  |
+
+Ein `@Transactional` im Adapter schließt sich der Transaktion des Use Cases an (Propagation `REQUIRED`) und startet
+keine eigene. Spring ruft die Listener synchron im selben Thread auf, deshalb laufen Änderung am Artikel und Änderung an der
 Einkaufsliste in **einer** Transaktion: Schlägt das Anlegen des Eintrags fehl, wird auch die Mengenänderung
 zurückgerollt. Artikel und Liste können so nicht auseinanderlaufen.
 
@@ -510,8 +524,9 @@ oder schon abgelaufen sind, sortiert nach Ablaufdatum. Artikel ohne Ablaufdatum 
 - **In Tests** wird eine feste Uhr übergeben (`Clock.fixed(...)`). „Heute“ ist dann immer derselbe Tag,
   und Tests wie „läuft in 3 Tagen ab“ liefern an jedem Tag dasselbe Ergebnis.
 
-`Clock` ist Teil des JDK, deshalb braucht es dafür kein eigenes Port-Interface: Die Application hängt
-weiterhin nur vom JDK ab, nicht von Spring.
+`Clock` ist Teil des JDK, deshalb braucht es dafür kein eigenes Port-Interface; die Application bekommt dadurch
+keine neue Abhängigkeit. Von Spring nutzt die Application bewusst nur die Annotationen für das Verdrahten
+(`@Service`, `@Component`) und für Transaktionen (`@Transactional`); Ports und fachliche Logik kennen Spring nicht.
 
 Ablauf einer Abfrage:
 
@@ -811,24 +826,33 @@ Beim Wechsel von der In-Memory-Liste (M1) auf PostgreSQL (M2) haben sich Service
 
 ## Ablauf eines Requests
 
-Beispiel: Menge ändern.
+Beispiel: Menge ändern. Die Token-Prüfung zeigt „Wo die Prüfung stattfindet“ (Abschnitt „Haushalte und
+Autorisierung“), die Reaktion der Einkaufsliste „Vorratseinkäufe entstehen automatisch“.
 
 ```mermaid
 sequenceDiagram
   participant C as Client
   participant W as PantryItemController
   participant S as PantryItemService
+  participant H as CurrentHousehold
   participant R as PantryItemRepository
   participant P as PantryItem
+  participant E as DomainEventPublisher
 
   C->>W: PATCH /api/pantry-items/{id}/quantity {"amount": 0.5}
   W->>W: @Valid prüft ChangeQuantityRequest
   W->>S: changeQuantity(PantryItemId, 0.5)
+  Note over S,E: eine Transaktion (@Transactional)
+  S->>H: require()
+  H-->>S: HouseholdId (sonst 403)
   S->>R: findById(id)
   R-->>S: Optional<PantryItem>
+  S->>P: belongsTo(household)? sonst 404
   S->>P: changeQuantity(0.5)
-  P->>P: Quantity prüft amount ≥ 0
+  P->>P: Quantity prüft amount ≥ 0, merkt sich ggf. ein Event
   S->>R: save(item)
+  S->>P: pullDomainEvents()
+  S->>E: publish(events)
   S-->>W: PantryItem
   W-->>C: 200 PantryItemResponse (JSON)
 ```
@@ -860,7 +884,8 @@ sequenceDiagram
 | `members`                       | Namen aus `getMembers()`; die User-IDs bleiben intern |
 
 `ExpiringPantryItemResponse` (für `/expiring`) enthält dieselben Felder wie `PantryItemResponse`
-plus `daysUntilExpiry` (aus `ExpiringPantryItem.daysUntilExpiry()`) und `expired` (aus `expired()`).
+(`minimumAmount` und `belowMinimum` seit M7) plus `daysUntilExpiry` (aus `ExpiringPantryItem.daysUntilExpiry()`)
+und `expired` (aus `expired()`).
 
 Die Request-DTOs (`AddPantryItemRequest`, `ChangeQuantityRequest`) prüfen Eingaben bereits per Bean Validation,
 damit der Client verständliche Fehler bekommt. Die Domain prüft trotzdem selbst; sie ist die eigentliche Absicherung.

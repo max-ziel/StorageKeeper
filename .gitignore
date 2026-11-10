@@ -8,3 +8,6 @@ build/
 .DS_Store
 graphify-out/
 deploy/.env
+/.env
+.qodana/
+*.log

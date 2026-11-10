@@ -40,7 +40,7 @@ class PantryItemJpaEntity {
     private UUID storageLocationId;
 
     @Column(name = "minimum_amount", nullable = false)
-    private  BigDecimal minimumAmount;
+    private BigDecimal minimumAmount;
 
     /** Required by JPA. */
     protected PantryItemJpaEntity() {
