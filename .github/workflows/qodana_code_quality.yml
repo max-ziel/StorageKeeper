@@ -32,7 +32,7 @@ jobs:
           mkdir -p .qodana/code-coverage
           cp build/reports/jacoco/test/jacocoTestReport.xml .qodana/code-coverage/
       - name: 'Qodana Scan'
-        uses: JetBrains/qodana-action@v2026.1
+        uses: JetBrains/qodana-action@v2026.2
         with:
           pr-mode: false
         env:
