@@ -47,7 +47,7 @@ services:
       retries: 10
 
   keycloak:
-    image: keycloak/keycloak:26.4
+    image: keycloak/keycloak:26.7
     restart: unless-stopped
     command: start --import-realm
     depends_on:
