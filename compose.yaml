@@ -11,7 +11,7 @@ services:
   # Issues the JWTs for local development (realm "storagekeeper" with the test users alice, bob and carol).
   # Fixed port, because the issuer URL in the tokens must match storagekeeper's issuer-uri.
   keycloak:
-    image: keycloak/keycloak:26.4
+    image: keycloak/keycloak:26.7
     command: start-dev --import-realm
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
