@@ -25,13 +25,13 @@ class SpringSecurityCurrentUserProviderTest {
     @Test
     void jwtUserHasSubjectAsIdAndUserNameAsDisplayName() {
         Jwt jwt = Jwt.withTokenValue("token")
-                .header("alg", "none")
-                .subject("4f1c-sub")
-                .claim(SpringSecurityCurrentUserProvider.DISPLAY_NAME_CLAIM, "alice")
-                .build();
+            .header("alg", "none")
+            .subject("4f1c-sub")
+            .claim(SpringSecurityCurrentUserProvider.DISPLAY_NAME_CLAIM, "alice")
+            .build();
         // With authorities the token counts as authenticated, as after the real JWT check.
         SecurityContextHolder.getContext().setAuthentication(
-                new JwtAuthenticationToken(jwt, AuthorityUtils.NO_AUTHORITIES));
+            new JwtAuthenticationToken(jwt, AuthorityUtils.NO_AUTHORITIES));
 
         CurrentUser user = provider.currentUser();
 
@@ -47,7 +47,7 @@ class SpringSecurityCurrentUserProviderTest {
     @Test
     void anonymousUserIsNoCurrentUser() {
         SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken(
-                "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
+            "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
 
         assertThatIllegalStateException().isThrownBy(provider::currentUser);
     }

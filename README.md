@@ -135,9 +135,11 @@ Namen müssen nur innerhalb eines Haushalts eindeutig sein.
 
 Fehler kommen als `application/problem+json` (`400` bei ungültigen Eingaben oder unbekanntem Lagerort,
 `403` ohne Haushalt, `404` bei unbekannter Artikel- oder Eintrags-ID, `409` bei doppeltem Lagerort-Namen oder wenn
-zwei gleichzeitige Requests kollidieren, `500` mit allgemeiner Meldung bei einem Programmfehler).
-Der `Location`-Header einer `201`-Antwort nennt die URL des neuen Objekts; einen `GET` auf einzelne Objekte gibt es
-bisher nur für den Haushalt.
+zwei gleichzeitige Requests an einer Eindeutigkeitsregel kollidieren, `500` mit allgemeiner Meldung bei einem
+Programmfehler).
+Der `Location`-Header einer `201`-Antwort identifiziert das neue Objekt (RFC 9110). Abrufen kann man es dort nicht:
+Einen `GET` auf einzelne Objekte gibt es bisher nur für den Haushalt (`/api/household`); Artikel, Lagerorte und
+manuelle Einträge stehen in ihren Listen. Unter derselben URL ändert oder löscht man Artikel und manuelle Einträge.
 Artikel und Einträge eines anderen Haushalts gelten als unbekannt (`404`), damit niemand fremde IDs ausprobieren kann.
 Ein fehlendes oder ungültiges Token ergibt `401`, ebenfalls als `problem+json`; der Header `WWW-Authenticate` nennt zusätzlich den Grund.
 
@@ -276,20 +278,34 @@ Keycloak und optional Prometheus, beschrieben in `deploy/compose.yaml`.
 
 Spring Boot baut das Image mit Cloud Native Buildpacks (Paketo), ohne Dockerfile: Java-25-Laufzeit (BellSoft
 Liberica JRE), Speicher-Einstellungen passend zum Container-Limit, Start als Nicht-Root-Nutzer. Das Ergebnis ist
-`ghcr.io/max-ziel/storagekeeper:0.7.0`, zusätzlich getaggt als `:latest`. Ein anderes Repository setzt man
-mit `-PimageRepository=...`, einen weiteren Tag mit `-PimageTag=...`.
+`ghcr.io/max-ziel/storagekeeper:0.7.0` (die Version aus `build.gradle.kts`). Ein anderes Repository setzt man mit
+`-PimageRepository=...`, andere Tags mit `-PimageTags=a,b` (der erste wird der Name, die übrigen zusätzliche Tags).
 
-Die CI (`.github/workflows/ci.yml`, Job `image`) baut das Image bei jedem Push auf `main`, nachdem die Tests grün
-sind, und veröffentlicht es in der GitHub Container Registry, mit den Tags `latest`, Version und Kurz-Hash des Commits.
+Die CI (`.github/workflows/ci.yml`, Job `image`) veröffentlicht in der GitHub Container Registry, nachdem die Tests
+grün sind:
+
+| Auslöser                  | Tags des Images                       |
+|---------------------------|---------------------------------------|
+| Push auf `main`           | `latest` und Kurz-Hash, z. B. `ee780fb` |
+| Git-Tag `v<Version>`      | nur die Version, z. B. `0.7.0`         |
+
+Ein Versions-Tag wird so genau einmal geschrieben und zeigt immer auf denselben Stand. Passt der Git-Tag nicht zur
+Version in `build.gradle.kts`, bricht der Job ab.
 Damit andere das Image ohne Anmeldung ziehen können, muss das Paket auf GitHub einmal auf „public“ gestellt werden
 (Package settings → Change visibility).
 
 ### Versionen
 
-Die Version in `build.gradle.kts` folgt dem Milestone (`0.<Milestone>.<Patch>`, aktuell `0.7.0`), Änderungen stehen
-in [CHANGELOG.md](CHANGELOG.md). Nach dem Merge eines Milestones wird `main` getaggt, z. B.
-`git tag v0.7.0 && git push origin v0.7.0`. Bis zur nächsten Version überschreibt die CI das Image `:0.7.0` bei jedem
-Push auf `main`; dauerhaft eindeutig ist nur der Tag mit dem Kurz-Hash.
+Die Version in `build.gradle.kts` folgt dem Milestone (`0.<Milestone>.<Patch>`), Änderungen stehen in
+[CHANGELOG.md](CHANGELOG.md). Ablauf für ein Release:
+
+1. Auf dem Milestone-Branch die Version setzen (z. B. `0.7.0`) und den CHANGELOG ergänzen.
+2. Nach dem Merge `main` taggen: `git tag v0.7.0` und `git push origin v0.7.0`. Die CI veröffentlicht dann das
+   Image `:0.7.0`.
+3. Zu Beginn des nächsten Milestones auf `0.8.0-SNAPSHOT` erhöhen, damit lokale Builds nicht wie ein Release heißen.
+
+Für den Betrieb `STORAGEKEEPER_VERSION` in `.env` auf eine Version setzen statt `latest`; `latest` ist immer der
+neueste Stand von `main`.
 
 ### Starten
 
@@ -310,7 +326,7 @@ Ist ein Passwort in `.env` leer, startet der Stack nicht und nennt die fehlende 
 
 | Variable in `.env`               | Bedeutung                                                                         |
 |----------------------------------|-----------------------------------------------------------------------------------|
-| `STORAGEKEEPER_VERSION`          | Image-Tag, Standard `latest`                                                      |
+| `STORAGEKEEPER_VERSION`          | Image-Tag, Standard `latest` (neuester Stand von `main`); im Betrieb eine Version, z. B. `0.7.0` |
 | `POSTGRES_PASSWORD`              | Superuser `postgres`, nur für Administration (Pflicht)                            |
 | `STORAGEKEEPER_DB_PASSWORD`      | Datenbank-Login `storagekeeper` der App, sieht nur ihre Datenbank (Pflicht)       |
 | `KEYCLOAK_DB_PASSWORD`           | Datenbank-Login `keycloak`, sieht nur die Keycloak-Datenbank (Pflicht)           |
@@ -348,8 +364,12 @@ Hinweise:
     -c "DO \$\$ DECLARE t record; BEGIN FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP EXECUTE format('ALTER TABLE public.%I OWNER TO keycloak', t.tablename); END LOOP; END \$\$"
   ```
 
-  Danach `docker compose --env-file .env up -d`. Der Login `storagekeeper` bleibt dabei Superuser; wer das ändern will,
-  legt das Volume neu an. Der Realm wird nur importiert, wenn er noch nicht existiert: In der Admin-Konsole die
+  Danach `docker compose --env-file .env up -d`. Geprüft gegen ein Volume aus M6: Keycloak 26.4 legt in seiner
+  Datenbank nur Tabellen an (keine Views, Sequenzen oder Funktionen; Indizes gehören automatisch dem Eigentümer der
+  Tabelle), deshalb reicht der Besitzerwechsel oben. `REASSIGN OWNED BY storagekeeper` wäre bequemer, würde aber auch
+  die Datenbank `storagekeeper` selbst an `keycloak` übertragen. Bei einem alten Volume gibt es den Superuser
+  `postgres` nicht, `POSTGRES_PASSWORD` wirkt dort also nicht; der Login `storagekeeper` bleibt Superuser. Wer das
+  ändern will, legt das Volume neu an. Der Realm wird nur importiert, wenn er noch nicht existiert: In der Admin-Konsole die
   Testnutzer und den Client `storagekeeper-cli` löschen und `storagekeeper-web` wie in `deploy/keycloak` anlegen.
 - **Logs:** Jede Logzeile der App enthält die Nutzer-ID (`user.id`), also ein personenbezogenes Pseudonym. Docker
   hebt höchstens 5 Dateien à 10 MB auf (`logging` in `deploy/compose.yaml`), ältere Zeilen werden gelöscht. Wer Logs

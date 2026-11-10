@@ -1,23 +1,15 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
-import io.github.maxziel.storagekeeper.domain.HouseholdId;
-import io.github.maxziel.storagekeeper.domain.ItemName;
-import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntry;
-import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntryId;
-import io.github.maxziel.storagekeeper.domain.Quantity;
-import io.github.maxziel.storagekeeper.domain.Unit;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import io.github.maxziel.storagekeeper.domain.*;
+import jakarta.persistence.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Database row of table {@code manual_shopping_list_entry}. The table is created by Flyway. */
+/**
+ * Database row of table {@code manual_shopping_list_entry}. The table is created by Flyway.
+ */
 @Entity
 @Table(name = "manual_shopping_list_entry")
 class ManualShoppingListEntryJpaEntity {
@@ -31,7 +23,9 @@ class ManualShoppingListEntryJpaEntity {
     @Column(nullable = false, length = ItemName.MAX_LENGTH)
     private String name;
 
-    /** {@code null} together with {@link #unit} if no amount was given. */
+    /**
+     * {@code null} together with {@link #unit} if no amount was given.
+     */
     private BigDecimal amount;
 
     @Enumerated(EnumType.STRING)
@@ -41,7 +35,9 @@ class ManualShoppingListEntryJpaEntity {
     @Column(name = "added_at", nullable = false)
     private Instant addedAt;
 
-    /** Required by JPA. */
+    /**
+     * Required by JPA.
+     */
     protected ManualShoppingListEntryJpaEntity() {
     }
 
@@ -58,10 +54,10 @@ class ManualShoppingListEntryJpaEntity {
 
     ManualShoppingListEntry toDomain() {
         return new ManualShoppingListEntry(
-                new ManualShoppingListEntryId(id),
-                new HouseholdId(householdId),
-                new ItemName(name),
-                amount == null ? null : new Quantity(amount, unit),
-                addedAt);
+            new ManualShoppingListEntryId(id),
+            new HouseholdId(householdId),
+            new ItemName(name),
+            amount == null ? null : new Quantity(amount, unit),
+            addedAt);
     }
 }

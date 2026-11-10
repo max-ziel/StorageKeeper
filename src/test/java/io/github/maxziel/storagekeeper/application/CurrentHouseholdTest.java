@@ -31,7 +31,7 @@ class CurrentHouseholdTest {
     @Test
     void returnsTheHouseholdOfTheCurrentUser() {
         Household household = Household.found(new HouseholdName("WG"),
-                new HouseholdMember(ALICE.userId(), "alice"), InviteCode.generate());
+            new HouseholdMember(ALICE.userId(), "alice"), InviteCode.generate());
         when(currentUserProvider.currentUser()).thenReturn(ALICE);
         when(householdRepository.findByMember(ALICE.userId())).thenReturn(Optional.of(household));
 

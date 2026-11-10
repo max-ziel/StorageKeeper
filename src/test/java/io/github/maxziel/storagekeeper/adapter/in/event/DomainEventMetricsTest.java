@@ -31,8 +31,8 @@ class DomainEventMetricsTest {
 
     private double count(String type) {
         return meterRegistry.get(DomainEventMetrics.METRIC_NAME)
-                .tag("type", type)
-                .counter()
-                .count();
+            .tag("type", type)
+            .counter()
+            .count();
     }
 }

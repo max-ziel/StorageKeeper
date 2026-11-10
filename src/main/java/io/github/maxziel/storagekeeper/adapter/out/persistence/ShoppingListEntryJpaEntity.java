@@ -11,7 +11,9 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Database row of table {@code shopping_list_entry}. The table is created by Flyway. */
+/**
+ * Database row of table {@code shopping_list_entry}. The table is created by Flyway.
+ */
 @Entity
 @Table(name = "shopping_list_entry")
 class ShoppingListEntryJpaEntity {
@@ -25,7 +27,9 @@ class ShoppingListEntryJpaEntity {
     @Column(name = "added_at", nullable = false)
     private Instant addedAt;
 
-    /** Required by JPA. */
+    /**
+     * Required by JPA.
+     */
     protected ShoppingListEntryJpaEntity() {
     }
 

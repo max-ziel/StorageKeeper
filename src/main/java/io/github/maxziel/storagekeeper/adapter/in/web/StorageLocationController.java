@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URI;
 import java.util.List;
 
-/** REST endpoints for storage locations. */
+/**
+ * REST endpoints for storage locations.
+ */
 @RestController
 @Tag(name = "Lagerorte", description = "Orte, an denen Vorräte liegen")
 @RequestMapping("/api/storage-locations")
@@ -35,8 +37,8 @@ class StorageLocationController {
     @GetMapping
     List<StorageLocationResponse> listAll() {
         return listStorageLocations.listAll()
-                .stream()
-                .map(StorageLocationResponse::from)
-                .toList();
+            .stream()
+            .map(StorageLocationResponse::from)
+            .toList();
     }
 }

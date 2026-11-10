@@ -30,10 +30,10 @@ class ShoppingListController {
     private final RemoveManualShoppingListEntryUseCase removeManualEntry;
 
     ShoppingListController(
-            ListShoppingListUseCase listShoppingList,
-            CheckOffStockPurchaseUseCase checkOffStockPurchase,
-            AddManualShoppingListEntryUseCase addManualEntry,
-            RemoveManualShoppingListEntryUseCase removeManualEntry
+        ListShoppingListUseCase listShoppingList,
+        CheckOffStockPurchaseUseCase checkOffStockPurchase,
+        AddManualShoppingListEntryUseCase addManualEntry,
+        RemoveManualShoppingListEntryUseCase removeManualEntry
     ) {
         this.listShoppingList = listShoppingList;
         this.checkOffStockPurchase = checkOffStockPurchase;
@@ -46,7 +46,9 @@ class ShoppingListController {
         return ShoppingListResponse.from(listShoppingList.getShoppingList());
     }
 
-    /** Adds the bought amount to the item and returns the item with its new stock. */
+    /**
+     * Adds the bought amount to the item and returns the item with its new stock.
+     */
     @PostMapping("/stock-purchases/{id}/check-off")
     PantryItemResponse checkOff(@PathVariable UUID id, @Valid @RequestBody CheckOffStockPurchaseRequest request) {
         return PantryItemResponse.from(checkOffStockPurchase.checkOff(new ShoppingListEntryId(id), request.amount()));
@@ -54,13 +56,15 @@ class ShoppingListController {
 
     @PostMapping("/manual-entries")
     ResponseEntity<ManualShoppingListEntryResponse> addManualEntry(
-            @Valid @RequestBody AddManualShoppingListEntryRequest request) {
+        @Valid @RequestBody AddManualShoppingListEntryRequest request) {
         ManualShoppingListEntry entry = addManualEntry.add(request.toName(), request.toQuantity());
         URI uri = URI.create("/api/shopping-list/manual-entries/" + entry.getManualShoppingListEntryId());
         return ResponseEntity.created(uri).body(ManualShoppingListEntryResponse.from(entry));
     }
 
-    /** Checking off a manual entry simply removes it. */
+    /**
+     * Checking off a manual entry simply removes it.
+     */
     @DeleteMapping("/manual-entries/{id}")
     ResponseEntity<Void> removeManualEntry(@PathVariable UUID id) {
         removeManualEntry.remove(new ManualShoppingListEntryId(id));

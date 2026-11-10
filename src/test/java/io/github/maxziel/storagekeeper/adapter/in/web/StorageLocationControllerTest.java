@@ -13,11 +13,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.sql.SQLException;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -46,50 +48,50 @@ class StorageLocationControllerTest {
         when(addStorageLocation.add(any())).thenReturn(cellar);
 
         mockMvc.perform(post("/api/storage-locations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Keller"}
-                                """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(cellar.getStorageLocationId().toString()))
-                .andExpect(jsonPath("$.name").value("Keller"))
-                .andExpect(jsonPath("$.defaultLocation").value(false));
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Keller"}
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.id").value(cellar.getStorageLocationId().toString()))
+            .andExpect(jsonPath("$.name").value("Keller"))
+            .andExpect(jsonPath("$.defaultLocation").value(false));
     }
 
     @Test
     void addWithExistingNameReturnsConflict() throws Exception {
         when(addStorageLocation.add(any()))
-                .thenThrow(new StorageLocationAlreadyExistsException(new LocationName("Keller")));
+            .thenThrow(new StorageLocationAlreadyExistsException(new LocationName("Keller")));
 
         mockMvc.perform(post("/api/storage-locations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "keller"}
-                                """))
-                .andExpect(status().isConflict());
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "keller"}
+                    """))
+            .andExpect(status().isConflict());
     }
 
     @Test
     void addRejectsBlankName() throws Exception {
         mockMvc.perform(post("/api/storage-locations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": " "}
-                                """))
-                .andExpect(status().isBadRequest());
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": " "}
+                    """))
+            .andExpect(status().isBadRequest());
     }
 
     @Test
     void listMarksDefaultLocation() throws Exception {
         when(listStorageLocations.listAll()).thenReturn(List.of(
-                StorageLocation.create(HOUSEHOLD, new LocationName("Keller")),
-                StorageLocation.createDefault(HOUSEHOLD)));
+            StorageLocation.create(HOUSEHOLD, new LocationName("Keller")),
+            StorageLocation.createDefault(HOUSEHOLD)));
 
         mockMvc.perform(get("/api/storage-locations"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].defaultLocation").value(false))
-                .andExpect(jsonPath("$[1].name").value("Vorrat"))
-                .andExpect(jsonPath("$[1].defaultLocation").value(true));
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].defaultLocation").value(false))
+            .andExpect(jsonPath("$[1].name").value("Vorrat"))
+            .andExpect(jsonPath("$[1].defaultLocation").value(true));
     }
 
     @Test
@@ -97,9 +99,9 @@ class StorageLocationControllerTest {
         when(listStorageLocations.listAll()).thenThrow(new NoHouseholdException());
 
         mockMvc.perform(get("/api/storage-locations"))
-                .andExpect(status().isForbidden())
-                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.detail").value("Create or join a household first."));
+            .andExpect(status().isForbidden())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.detail").value("Create or join a household first."));
     }
 
     @Test
@@ -108,27 +110,54 @@ class StorageLocationControllerTest {
         when(addStorageLocation.add(any())).thenReturn(cellar);
 
         mockMvc.perform(post("/api/storage-locations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Keller"}
-                                """))
-                .andExpect(status().isCreated())
-                .andExpect(header().string("Location", "/api/storage-locations/" + cellar.getStorageLocationId()));
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Keller"}
+                    """))
+            .andExpect(status().isCreated())
+            .andExpect(header().string("Location", "/api/storage-locations/" + cellar.getStorageLocationId()));
     }
 
     @Test
-    void constraintViolationReturnsConflictWithoutDatabaseDetails() throws Exception {
-        when(addStorageLocation.add(any())).thenThrow(new DataIntegrityViolationException(
-                "duplicate key value violates unique constraint \"uq_storage_location_household_name\""));
+    void uniqueViolationReturnsConflictWithoutDatabaseDetails() throws Exception {
+        when(addStorageLocation.add(any())).thenThrow(new DataIntegrityViolationException("could not execute statement",
+            new SQLException("duplicate key value violates unique constraint \"uq_storage_location_household_name\"",
+                "23505")));
 
         mockMvc.perform(post("/api/storage-locations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Keller"}
-                                """))
-                .andExpect(status().isConflict())
-                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.detail").value(ApiExceptionHandler.CONFLICT_DETAIL));
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Keller"}
+                    """))
+            .andExpect(status().isConflict())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.detail").value(ApiExceptionHandler.CONFLICT_DETAIL));
+    }
+
+    @Test
+    void duplicateKeyReturnsConflict() throws Exception {
+        when(addStorageLocation.add(any())).thenThrow(new DuplicateKeyException("duplicate key"));
+
+        mockMvc.perform(post("/api/storage-locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Keller"}
+                    """))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    void otherConstraintViolationIsAnInternalError() throws Exception {
+        when(addStorageLocation.add(any())).thenThrow(new DataIntegrityViolationException("could not execute statement",
+            new SQLException("new row violates check constraint \"ck_pantry_item_amount\"", "23514")));
+
+        mockMvc.perform(post("/api/storage-locations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Keller"}
+                    """))
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.detail").value(ApiExceptionHandler.UNEXPECTED_DETAIL));
     }
 
     @Test
@@ -136,12 +165,12 @@ class StorageLocationControllerTest {
         when(addStorageLocation.add(any())).thenThrow(new DomainValidationException("location name must not be blank"));
 
         mockMvc.perform(post("/api/storage-locations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Keller"}
-                                """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("location name must not be blank"));
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Keller"}
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.detail").value("location name must not be blank"));
     }
 
     @Test
@@ -149,9 +178,9 @@ class StorageLocationControllerTest {
         when(listStorageLocations.listAll()).thenThrow(new IllegalArgumentException("internal detail"));
 
         mockMvc.perform(get("/api/storage-locations"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.detail").value(ApiExceptionHandler.UNEXPECTED_DETAIL));
+            .andExpect(status().isInternalServerError())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.detail").value(ApiExceptionHandler.UNEXPECTED_DETAIL));
     }
 
     @Test
@@ -159,22 +188,22 @@ class StorageLocationControllerTest {
         when(listStorageLocations.listAll()).thenThrow(new IllegalStateException("household has no default location"));
 
         mockMvc.perform(get("/api/storage-locations"))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.detail").value(ApiExceptionHandler.UNEXPECTED_DETAIL));
+            .andExpect(status().isInternalServerError())
+            .andExpect(jsonPath("$.detail").value(ApiExceptionHandler.UNEXPECTED_DETAIL));
     }
 
     @Test
     void malformedJsonIsStillABadRequest() throws Exception {
         mockMvc.perform(post("/api/storage-locations")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": "))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": "))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     @Test
     void unsupportedMethodIsStillMethodNotAllowed() throws Exception {
         mockMvc.perform(delete("/api/storage-locations"))
-                .andExpect(status().isMethodNotAllowed());
+            .andExpect(status().isMethodNotAllowed());
     }
 }

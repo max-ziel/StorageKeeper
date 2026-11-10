@@ -17,10 +17,10 @@ public record ManualShoppingListEntryResponse(UUID id, String name, BigDecimal a
 
     static ManualShoppingListEntryResponse from(ManualShoppingListEntry entry) {
         return new ManualShoppingListEntryResponse(
-                entry.getManualShoppingListEntryId().value(),
-                entry.getName().value(),
-                entry.getQuantity().map(Quantity::amount).orElse(null),
-                entry.getQuantity().map(Quantity::unit).orElse(null),
-                entry.getAddedAt());
+            entry.getManualShoppingListEntryId().value(),
+            entry.getName().value(),
+            entry.getQuantity().map(Quantity::amount).orElse(null),
+            entry.getQuantity().map(Quantity::unit).orElse(null),
+            entry.getAddedAt());
     }
 }

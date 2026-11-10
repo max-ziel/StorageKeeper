@@ -7,7 +7,6 @@ import io.github.maxziel.storagekeeper.application.port.in.ExpiringPantryItem;
 import io.github.maxziel.storagekeeper.application.port.in.PantryItemFilter;
 import io.github.maxziel.storagekeeper.application.port.out.DomainEventPublisher;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
-
 import io.github.maxziel.storagekeeper.application.port.out.StorageLocationRepository;
 import io.github.maxziel.storagekeeper.domain.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,23 +31,24 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PantryItemServiceTest {
 
+    private static final HouseholdId HOUSEHOLD = HouseholdId.newId();
+    private static final HouseholdId OTHER_HOUSEHOLD = HouseholdId.newId();
+    private static final StorageLocation PANTRY = StorageLocation.createDefault(HOUSEHOLD);
+    /**
+     * "Today" is always 26 February 2027 in these tests.
+     */
+    private final Clock clock = Clock.fixed(Instant.parse("2027-02-26T10:00:00Z"), ZoneOffset.UTC);
+    private final PantryItem rice = PantryItem.create(HOUSEHOLD,
+        new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), LocalDate.of(2027, 3, 1),
+        PANTRY.getStorageLocationId());
     @Mock
     private PantryItemRepository repository;
-
     @Mock
     private StorageLocationRepository storageLocationRepository;
     @Mock
     private DomainEventPublisher eventPublisher;
     @Mock
     private CurrentHousehold currentHousehold;
-
-    private static final HouseholdId HOUSEHOLD = HouseholdId.newId();
-    private static final HouseholdId OTHER_HOUSEHOLD = HouseholdId.newId();
-    private static final StorageLocation PANTRY = StorageLocation.createDefault(HOUSEHOLD);
-
-    /** "Today" is always 26 February 2027 in these tests. */
-    private final Clock clock = Clock.fixed(Instant.parse("2027-02-26T10:00:00Z"), ZoneOffset.UTC);
-
     private PantryItemService service;
 
     @BeforeEach
@@ -57,10 +57,6 @@ class PantryItemServiceTest {
         lenient().when(currentHousehold.require()).thenReturn(HOUSEHOLD);
         service = new PantryItemService(repository, storageLocationRepository, clock, eventPublisher, currentHousehold);
     }
-
-    private final PantryItem rice = PantryItem.create(HOUSEHOLD,
-            new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), LocalDate.of(2027, 3, 1),
-            PANTRY.getStorageLocationId());
 
     @Test
     void addWithoutLocationUsesDefaultLocation() {
@@ -84,7 +80,7 @@ class PantryItemServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         PantryItem added = service.add(new AddPantryItemCommand(
-                rice.getItemName(), rice.getQuantity(), null, cellar.getStorageLocationId(), null));
+            rice.getItemName(), rice.getQuantity(), null, cellar.getStorageLocationId(), null));
 
         assertThat(added.getStorageLocationId()).isEqualTo(cellar.getStorageLocationId());
     }
@@ -93,12 +89,12 @@ class PantryItemServiceTest {
     void addWithLocationOfAnotherHouseholdFails() {
         StorageLocation foreignCellar = StorageLocation.create(OTHER_HOUSEHOLD, new LocationName("Keller"));
         when(storageLocationRepository.findById(foreignCellar.getStorageLocationId()))
-                .thenReturn(Optional.of(foreignCellar));
+            .thenReturn(Optional.of(foreignCellar));
         var command = new AddPantryItemCommand(
-                rice.getItemName(), rice.getQuantity(), null, foreignCellar.getStorageLocationId(), null);
+            rice.getItemName(), rice.getQuantity(), null, foreignCellar.getStorageLocationId(), null);
 
         assertThatExceptionOfType(StorageLocationNotFoundException.class)
-                .isThrownBy(() -> service.add(command));
+            .isThrownBy(() -> service.add(command));
         verify(repository, never()).save(any());
     }
 
@@ -109,7 +105,7 @@ class PantryItemServiceTest {
         var command = new AddPantryItemCommand(rice.getItemName(), rice.getQuantity(), null, unknown, null);
 
         assertThatExceptionOfType(StorageLocationNotFoundException.class)
-                .isThrownBy(() -> service.add(command));
+            .isThrownBy(() -> service.add(command));
         verify(repository, never()).save(any());
     }
 
@@ -129,7 +125,7 @@ class PantryItemServiceTest {
         when(repository.findById(unknown)).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(PantryItemNotFoundException.class)
-                .isThrownBy(() -> service.changeQuantity(unknown, BigDecimal.ONE));
+            .isThrownBy(() -> service.changeQuantity(unknown, BigDecimal.ONE));
     }
 
     @Test
@@ -138,7 +134,7 @@ class PantryItemServiceTest {
         when(repository.findById(unknown)).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(PantryItemNotFoundException.class)
-                .isThrownBy(() -> service.remove(unknown));
+            .isThrownBy(() -> service.remove(unknown));
         verify(repository, never()).deleteById(any());
     }
 
@@ -154,15 +150,15 @@ class PantryItemServiceTest {
     @Test
     void itemOfAnotherHouseholdCountsAsNotFound() {
         PantryItem foreign = PantryItem.create(OTHER_HOUSEHOLD, new ItemName("Fremder Reis"),
-                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.newId());
+            new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.newId());
         when(repository.findById(foreign.getPantryItemId())).thenReturn(Optional.of(foreign));
 
         assertThatExceptionOfType(PantryItemNotFoundException.class)
-                .isThrownBy(() -> service.changeQuantity(foreign.getPantryItemId(), BigDecimal.TEN));
+            .isThrownBy(() -> service.changeQuantity(foreign.getPantryItemId(), BigDecimal.TEN));
         assertThatExceptionOfType(PantryItemNotFoundException.class)
-                .isThrownBy(() -> service.remove(foreign.getPantryItemId()));
+            .isThrownBy(() -> service.remove(foreign.getPantryItemId()));
         assertThatExceptionOfType(PantryItemNotFoundException.class)
-                .isThrownBy(() -> service.restock(foreign.getPantryItemId(), BigDecimal.ONE));
+            .isThrownBy(() -> service.restock(foreign.getPantryItemId(), BigDecimal.ONE));
         verify(repository, never()).save(any());
         verify(repository, never()).deleteById(any());
         assertThat(foreign.getQuantity().amount()).isEqualByComparingTo("1");
@@ -173,10 +169,10 @@ class PantryItemServiceTest {
         when(currentHousehold.require()).thenThrow(new NoHouseholdException());
 
         assertThatExceptionOfType(NoHouseholdException.class)
-                .isThrownBy(() -> service.search(new PantryItemFilter(null, false), new PageQuery(0, 20)));
+            .isThrownBy(() -> service.search(new PantryItemFilter(null, false), new PageQuery(0, 20)));
         assertThatExceptionOfType(NoHouseholdException.class)
-                .isThrownBy(() -> service.add(new AddPantryItemCommand(
-                        rice.getItemName(), rice.getQuantity(), null, null, null)));
+            .isThrownBy(() -> service.add(new AddPantryItemCommand(
+                rice.getItemName(), rice.getQuantity(), null, null, null)));
         verifyNoInteractions(repository, storageLocationRepository, eventPublisher);
     }
 
@@ -196,7 +192,7 @@ class PantryItemServiceTest {
     @Test
     void listExpiringWithinMarksExpiredItems() {
         PantryItem oldMilk = PantryItem.create(HOUSEHOLD, new ItemName("Milch"), new Quantity(BigDecimal.ONE, Unit.LITER),
-                LocalDate.of(2027, 2, 24), PANTRY.getStorageLocationId());
+            LocalDate.of(2027, 2, 24), PANTRY.getStorageLocationId());
         when(repository.findWithExpiryDateUpTo(HOUSEHOLD, LocalDate.of(2027, 2, 26))).thenReturn(List.of(oldMilk));
 
         List<ExpiringPantryItem> expiring = service.listExpiringWithin(0);
@@ -210,7 +206,7 @@ class PantryItemServiceTest {
     @Test
     void listExpiringWithinRejectsNegativeDays() {
         assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> service.listExpiringWithin(-1));
+            .isThrownBy(() -> service.listExpiringWithin(-1));
     }
 
     @Test
@@ -219,7 +215,7 @@ class PantryItemServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         PantryItem added = service.add(new AddPantryItemCommand(
-                rice.getItemName(), rice.getQuantity(), null, null, new BigDecimal("2")));
+            rice.getItemName(), rice.getQuantity(), null, null, new BigDecimal("2")));
 
         assertThat(added.getMinimumQuantity()).isEqualTo(new Quantity(new BigDecimal("2"), Unit.KILOGRAM));
         assertThat(added.isBelowMinimum()).isTrue();
@@ -241,7 +237,7 @@ class PantryItemServiceTest {
         when(repository.findById(unknown)).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(PantryItemNotFoundException.class)
-                .isThrownBy(() -> service.changeMinimumAmount(unknown, BigDecimal.ONE));
+            .isThrownBy(() -> service.changeMinimumAmount(unknown, BigDecimal.ONE));
     }
 
     @Test
@@ -272,7 +268,7 @@ class PantryItemServiceTest {
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         PantryItem added = service.add(new AddPantryItemCommand(
-                rice.getItemName(), rice.getQuantity(), null, null, new BigDecimal("2")));
+            rice.getItemName(), rice.getQuantity(), null, null, new BigDecimal("2")));
 
         verify(eventPublisher).publish(List.of(new PantryItemFellBelowMinimum(added.getPantryItemId())));
     }
@@ -295,6 +291,6 @@ class PantryItemServiceTest {
         when(repository.findById(any())).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(PantryItemNotFoundException.class)
-                .isThrownBy(() -> service.restock(PantryItemId.newId(), BigDecimal.ONE));
+            .isThrownBy(() -> service.restock(PantryItemId.newId(), BigDecimal.ONE));
     }
 }

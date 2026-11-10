@@ -19,12 +19,14 @@ public class PantryItem {
     private final PantryItemId pantryItemId;
     private final HouseholdId householdId;
     private final ItemName itemName;
-    private Quantity quantity;
     private final LocalDate expiryDate;
     private final StorageLocationId storageLocationId;
-    private BigDecimal minimumAmount;
-    /** Events raised by changes since the item was loaded; collected by {@link #pullDomainEvents()}. */
+    /**
+     * Events raised by changes since the item was loaded; collected by {@link #pullDomainEvents()}.
+     */
     private final List<DomainEvent> domainEvents = new ArrayList<>();
+    private Quantity quantity;
+    private BigDecimal minimumAmount;
 
     public PantryItem(PantryItemId pantryItemId, HouseholdId householdId, ItemName itemName, Quantity quantity,
                       LocalDate expiryDate, StorageLocationId storageLocationId) {
@@ -48,7 +50,9 @@ public class PantryItem {
         this.minimumAmount = quantity.withAmount(minimumAmount).amount();
     }
 
-    /** Creates a new item with a freshly generated id. */
+    /**
+     * Creates a new item with a freshly generated id.
+     */
     public static PantryItem create(HouseholdId householdId, ItemName itemName, Quantity quantity, LocalDate expiryDate,
                                     StorageLocationId storageLocationId) {
         return new PantryItem(PantryItemId.newId(), householdId, itemName, quantity, expiryDate, storageLocationId);
@@ -73,7 +77,9 @@ public class PantryItem {
         return quantity.amount().compareTo(minimumAmount) < 0;
     }
 
-    /** Sets a new amount; the unit stays the same. */
+    /**
+     * Sets a new amount; the unit stays the same.
+     */
     public void changeQuantity(BigDecimal newAmount) {
         boolean wasBelowMinimum = isBelowMinimum();
         this.quantity = this.quantity.withAmount(newAmount);
@@ -112,7 +118,9 @@ public class PantryItem {
         return events;
     }
 
-    /** Raises an event only when the item crosses its minimum stock, not on every change. */
+    /**
+     * Raises an event only when the item crosses its minimum stock, not on every change.
+     */
     private void recordMinimumTransition(boolean wasBelowMinimum) {
         boolean isBelowMinimum = isBelowMinimum();
         if (!wasBelowMinimum && isBelowMinimum) {
@@ -130,7 +138,9 @@ public class PantryItem {
         return householdId;
     }
 
-    /** {@code true} if the item is part of this household's pantry. */
+    /**
+     * {@code true} if the item is part of this household's pantry.
+     */
     public boolean belongsTo(HouseholdId household) {
         return householdId.equals(household);
     }

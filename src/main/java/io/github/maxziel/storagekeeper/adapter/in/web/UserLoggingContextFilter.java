@@ -25,9 +25,9 @@ class UserLoggingContextFilter extends OncePerRequestFilter {
     @Override
     @SuppressWarnings("try") // the resource is only closed, never used inside the block
     protected void doFilterInternal(
-            @NonNull HttpServletRequest request,
-            @NonNull HttpServletResponse response,
-            @NonNull FilterChain filterChain
+        @NonNull HttpServletRequest request,
+        @NonNull HttpServletResponse response,
+        @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

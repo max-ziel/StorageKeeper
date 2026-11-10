@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Spring Data generates the implementation at runtime. Only used by {@link JpaStorageLocationRepository}. */
+/**
+ * Spring Data generates the implementation at runtime. Only used by {@link JpaStorageLocationRepository}.
+ */
 interface SpringDataStorageLocationRepository extends JpaRepository<StorageLocationJpaEntity, UUID> {
 
     // Spring Data derives the queries from the method names.

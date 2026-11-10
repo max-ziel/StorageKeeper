@@ -8,7 +8,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-/** Implements the {@link HouseholdRepository} port with PostgreSQL via Spring Data JPA. */
+/**
+ * Implements the {@link HouseholdRepository} port with PostgreSQL via Spring Data JPA.
+ */
 @Repository
 class JpaHouseholdRepository implements HouseholdRepository {
 

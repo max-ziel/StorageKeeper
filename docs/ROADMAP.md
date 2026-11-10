@@ -41,6 +41,9 @@ und die ArchUnit-Regeln bleiben bestehen.
   Integrationstests getrennt lauffähig, README-Abschnitte „Tests“, „Lizenz“, „Mitwirken“
 - [x] Teil 3: Betrieb und Sicherheit: Produktions-Realm ohne Testnutzer, eigener DB-Nutzer für Keycloak,
   Swagger UI abschaltbar, Versionen und Tags, Dependabot, `SECURITY.md`, ArchUnit-Regeln für Application und Event-Port
+- [x] Teil 4: Nacharbeiten aus dem zweiten Audit: Swagger-Client `storagekeeper-web` auch im Dev-Realm (mit Test für
+  beide Realm-Dateien), `409` nur noch bei Unique-Verletzung, Image-Version nur aus Git-Tags, Dependabot für
+  Compose-Images, `.editorconfig`, `ExpiringPantryItemResponse` ohne doppelte Felder
 
 ### Optional danach
 

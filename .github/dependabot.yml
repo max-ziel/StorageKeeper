@@ -15,3 +15,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+
+  # Images in compose.yaml (development) and deploy/compose.yaml (PostgreSQL, Keycloak, Prometheus).
+  # Keycloak in particular gets security fixes as new image tags.
+  - package-ecosystem: docker-compose
+    directories: [ /, /deploy ]
+    schedule:
+      interval: weekly

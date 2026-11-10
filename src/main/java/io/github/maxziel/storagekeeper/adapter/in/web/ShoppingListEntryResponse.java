@@ -20,14 +20,14 @@ public record ShoppingListEntryResponse(UUID id, UUID pantryItemId, String name,
     static ShoppingListEntryResponse from(ShoppingListItem shoppingListItem) {
         PantryItem item = shoppingListItem.item();
         return new ShoppingListEntryResponse(
-                shoppingListItem.entry().getShoppingListEntryId().value(),
-                item.getPantryItemId().value(),
-                item.getItemName().value(),
-                item.getQuantity().unit(),
-                item.getQuantity().amount(),
-                item.getMinimumQuantity().amount(),
-                item.getMissingQuantity().amount(),
-                item.getStorageLocationId().value(),
-                shoppingListItem.entry().getAddedAt());
+            shoppingListItem.entry().getShoppingListEntryId().value(),
+            item.getPantryItemId().value(),
+            item.getItemName().value(),
+            item.getQuantity().unit(),
+            item.getQuantity().amount(),
+            item.getMinimumQuantity().amount(),
+            item.getMissingQuantity().amount(),
+            item.getStorageLocationId().value(),
+            shoppingListItem.entry().getAddedAt());
     }
 }

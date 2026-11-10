@@ -40,9 +40,9 @@ class JpaShoppingListRepositoryTest {
     void setUp() {
         household = TestHouseholds.create(entityManager);
         rice = PantryItem.create(household.id(), new ItemName("Reis"),
-                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, household.defaultLocation());
+            new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, household.defaultLocation());
         salt = PantryItem.create(household.id(), new ItemName("Salz"),
-                new Quantity(BigDecimal.ONE, Unit.PACKAGE), null, household.defaultLocation());
+            new Quantity(BigDecimal.ONE, Unit.PACKAGE), null, household.defaultLocation());
     }
 
     @Test
@@ -50,9 +50,9 @@ class JpaShoppingListRepositoryTest {
         pantryItemRepository.save(rice);
         pantryItemRepository.save(salt);
         ShoppingListEntry later = repository.save(ShoppingListEntry.create(rice.getPantryItemId(),
-                Instant.parse("2027-02-26T12:00:00Z")));
+            Instant.parse("2027-02-26T12:00:00Z")));
         ShoppingListEntry earlier = repository.save(ShoppingListEntry.create(salt.getPantryItemId(),
-                Instant.parse("2027-02-26T08:00:00Z")));
+            Instant.parse("2027-02-26T08:00:00Z")));
 
         assertThat(repository.findAll(household.id())).containsExactly(earlier, later);
         assertThat(repository.existsByPantryItemId(rice.getPantryItemId())).isTrue();
@@ -62,12 +62,12 @@ class JpaShoppingListRepositoryTest {
     void findAllOnlyReturnsEntriesForItemsOfTheHousehold() {
         StoredHousehold otherHousehold = TestHouseholds.create(entityManager);
         PantryItem foreignRice = PantryItem.create(otherHousehold.id(), new ItemName("Reis"),
-                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, otherHousehold.defaultLocation());
+            new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, otherHousehold.defaultLocation());
         pantryItemRepository.save(rice);
         pantryItemRepository.save(foreignRice);
         ShoppingListEntry own = repository.save(ShoppingListEntry.create(rice.getPantryItemId(), Instant.now()));
         ShoppingListEntry foreign =
-                repository.save(ShoppingListEntry.create(foreignRice.getPantryItemId(), Instant.now()));
+            repository.save(ShoppingListEntry.create(foreignRice.getPantryItemId(), Instant.now()));
         entityManager.flush();
 
         assertThat(repository.findAll(household.id())).containsExactly(own);

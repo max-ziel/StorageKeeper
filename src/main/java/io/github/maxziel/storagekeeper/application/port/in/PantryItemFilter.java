@@ -10,7 +10,9 @@ import io.github.maxziel.storagekeeper.domain.StorageLocationId;
  */
 public record PantryItemFilter(StorageLocationId storageLocationId, boolean onlyBelowMinimum) {
 
-    /** No restriction: all items */
+    /**
+     * No restriction: all items
+     */
     public static PantryItemFilter none() {
         return new PantryItemFilter(null, false);
     }

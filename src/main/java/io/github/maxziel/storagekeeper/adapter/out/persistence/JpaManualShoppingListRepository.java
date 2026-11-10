@@ -32,9 +32,9 @@ class JpaManualShoppingListRepository implements ManualShoppingListRepository {
     @Override
     public List<ManualShoppingListEntry> findAll(HouseholdId householdId) {
         return jpaRepository.findByHouseholdIdOrderByAddedAtAsc(householdId.value())
-                .stream()
-                .map(ManualShoppingListEntryJpaEntity::toDomain)
-                .toList();
+            .stream()
+            .map(ManualShoppingListEntryJpaEntity::toDomain)
+            .toList();
     }
 
     @Override

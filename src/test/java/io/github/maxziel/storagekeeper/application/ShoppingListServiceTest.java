@@ -32,35 +32,28 @@ class ShoppingListServiceTest {
     private static final Instant NOW = Instant.parse("2027-02-26T10:00:00Z");
     private static final HouseholdId HOUSEHOLD = HouseholdId.newId();
     private static final HouseholdId OTHER_HOUSEHOLD = HouseholdId.newId();
-
+    private final PantryItem rice = PantryItem.create(HOUSEHOLD,
+        new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.newId());
+    private final PantryItem foreignRice = PantryItem.create(OTHER_HOUSEHOLD,
+        new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.newId());
     @Mock
     private ShoppingListRepository shoppingListRepository;
-
     @Mock
     private ManualShoppingListRepository manualShoppingListRepository;
-
     @Mock
     private PantryItemRepository pantryItemRepository;
-
     @Mock
     private RestockPantryItemUseCase restockPantryItem;
-
     @Mock
     private CurrentHousehold currentHousehold;
-
     private ShoppingListService service;
-
-    private final PantryItem rice = PantryItem.create(HOUSEHOLD,
-            new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.newId());
-    private final PantryItem foreignRice = PantryItem.create(OTHER_HOUSEHOLD,
-            new ItemName("Reis"), new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.newId());
 
     @BeforeEach
     void setUp() {
         // Every test runs as a member of HOUSEHOLD.
         lenient().when(currentHousehold.require()).thenReturn(HOUSEHOLD);
         service = new ShoppingListService(shoppingListRepository, manualShoppingListRepository, pantryItemRepository,
-                restockPantryItem, Clock.fixed(NOW, ZoneOffset.UTC), currentHousehold);
+            restockPantryItem, Clock.fixed(NOW, ZoneOffset.UTC), currentHousehold);
     }
 
     @Test
@@ -98,7 +91,7 @@ class ShoppingListServiceTest {
         ManualShoppingListEntry candles = ManualShoppingListEntry.create(HOUSEHOLD, new ItemName("Kerzen"), null, NOW);
         when(shoppingListRepository.findAll(HOUSEHOLD)).thenReturn(List.of(entry, orphan));
         when(pantryItemRepository.findAllById(List.of(rice.getPantryItemId(), orphan.getPantryItemId())))
-                .thenReturn(List.of(rice));
+            .thenReturn(List.of(rice));
         when(manualShoppingListRepository.findAll(HOUSEHOLD)).thenReturn(List.of(candles));
 
         ShoppingList list = service.getShoppingList();
@@ -127,7 +120,7 @@ class ShoppingListServiceTest {
         when(shoppingListRepository.findById(unknown)).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(ShoppingListEntryNotFoundException.class)
-                .isThrownBy(() -> service.checkOff(unknown, BigDecimal.ONE));
+            .isThrownBy(() -> service.checkOff(unknown, BigDecimal.ONE));
         verifyNoInteractions(restockPantryItem);
     }
 
@@ -135,11 +128,11 @@ class ShoppingListServiceTest {
     void entryForAnItemOfAnotherHouseholdCountsAsNotFound() {
         ShoppingListEntry foreignEntry = ShoppingListEntry.create(foreignRice.getPantryItemId(), NOW);
         when(shoppingListRepository.findById(foreignEntry.getShoppingListEntryId()))
-                .thenReturn(Optional.of(foreignEntry));
+            .thenReturn(Optional.of(foreignEntry));
         when(pantryItemRepository.findById(foreignRice.getPantryItemId())).thenReturn(Optional.of(foreignRice));
 
         assertThatExceptionOfType(ShoppingListEntryNotFoundException.class)
-                .isThrownBy(() -> service.checkOff(foreignEntry.getShoppingListEntryId(), BigDecimal.ONE));
+            .isThrownBy(() -> service.checkOff(foreignEntry.getShoppingListEntryId(), BigDecimal.ONE));
         verifyNoInteractions(restockPantryItem);
     }
 
@@ -174,19 +167,19 @@ class ShoppingListServiceTest {
         when(manualShoppingListRepository.findById(unknown)).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(ShoppingListEntryNotFoundException.class)
-                .isThrownBy(() -> service.remove(unknown));
+            .isThrownBy(() -> service.remove(unknown));
         verify(manualShoppingListRepository, never()).deleteById(any());
     }
 
     @Test
     void manualEntryOfAnotherHouseholdCountsAsNotFound() {
         ManualShoppingListEntry foreign =
-                ManualShoppingListEntry.create(OTHER_HOUSEHOLD, new ItemName("Kerzen"), null, NOW);
+            ManualShoppingListEntry.create(OTHER_HOUSEHOLD, new ItemName("Kerzen"), null, NOW);
         when(manualShoppingListRepository.findById(foreign.getManualShoppingListEntryId()))
-                .thenReturn(Optional.of(foreign));
+            .thenReturn(Optional.of(foreign));
 
         assertThatExceptionOfType(ShoppingListEntryNotFoundException.class)
-                .isThrownBy(() -> service.remove(foreign.getManualShoppingListEntryId()));
+            .isThrownBy(() -> service.remove(foreign.getManualShoppingListEntryId()));
         verify(manualShoppingListRepository, never()).deleteById(any());
     }
 

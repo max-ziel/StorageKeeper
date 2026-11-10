@@ -8,18 +8,26 @@ import io.github.maxziel.storagekeeper.domain.StorageLocationId;
 import java.util.List;
 import java.util.Optional;
 
-/** Storage for storage locations, as needed by the application. */
+/**
+ * Storage for storage locations, as needed by the application.
+ */
 public interface StorageLocationRepository {
 
     StorageLocation save(StorageLocation location);
 
-    /** Returns the household's locations sorted by name. */
+    /**
+     * Returns the household's locations sorted by name.
+     */
     List<StorageLocation> findAll(HouseholdId householdId);
 
-    /** Finds a location of any household; the caller checks {@link StorageLocation#belongsTo}. */
+    /**
+     * Finds a location of any household; the caller checks {@link StorageLocation#belongsTo}.
+     */
     Optional<StorageLocation> findById(StorageLocationId storageLocationId);
 
-    /** The household's default location; every household has exactly one. */
+    /**
+     * The household's default location; every household has exactly one.
+     */
     Optional<StorageLocation> findDefault(HouseholdId householdId);
 
     /**

@@ -25,8 +25,8 @@ import java.util.Objects;
  */
 @Service
 public class PantryItemService implements
-        AddPantryItemUseCase, ListPantryItemUseCase, ChangeQuantityUseCase, ChangeMinimumAmountUseCase,
-        RemovePantryItemUseCase, ListExpiringPantryItemsUseCase, RestockPantryItemUseCase {
+    AddPantryItemUseCase, ListPantryItemUseCase, ChangeQuantityUseCase, ChangeMinimumAmountUseCase,
+    RemovePantryItemUseCase, ListExpiringPantryItemsUseCase, RestockPantryItemUseCase {
 
     private final PantryItemRepository repository;
     private final StorageLocationRepository storageLocationRepository;
@@ -35,15 +35,15 @@ public class PantryItemService implements
     private final CurrentHousehold currentHousehold;
 
     public PantryItemService(
-            PantryItemRepository repository,
-            StorageLocationRepository storageLocationRepository,
-            Clock clock,
-            DomainEventPublisher eventPublisher,
-            CurrentHousehold currentHousehold
+        PantryItemRepository repository,
+        StorageLocationRepository storageLocationRepository,
+        Clock clock,
+        DomainEventPublisher eventPublisher,
+        CurrentHousehold currentHousehold
     ) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
         this.storageLocationRepository =
-                Objects.requireNonNull(storageLocationRepository, "storageLocationRepository must not be null");
+            Objects.requireNonNull(storageLocationRepository, "storageLocationRepository must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.eventPublisher = Objects.requireNonNull(eventPublisher, "eventPublisher must not be null");
         this.currentHousehold = Objects.requireNonNull(currentHousehold, "currentHousehold must not be null");
@@ -60,10 +60,10 @@ public class PantryItemService implements
     public PantryItem add(AddPantryItemCommand command) {
         HouseholdId household = currentHousehold.require();
         StorageLocationId locationId = command.storageLocationId() == null
-                ? defaultLocation(household)
-                : requireLocationOf(household, command.storageLocationId());
+            ? defaultLocation(household)
+            : requireLocationOf(household, command.storageLocationId());
         PantryItem item = PantryItem.create(
-                household, command.name(), command.quantity(), command.expiryDate(), locationId);
+            household, command.name(), command.quantity(), command.expiryDate(), locationId);
         if (command.minimumAmount() != null) {
             item.changeMinimumAmount(command.minimumAmount());
         }
@@ -85,8 +85,8 @@ public class PantryItemService implements
         HouseholdId household = currentHousehold.require();
         LocalDate today = LocalDate.now(clock);
         return repository.findWithExpiryDateUpTo(household, today.plusDays(days)).stream()
-                .map(item -> new ExpiringPantryItem(item, item.daysUntilExpiry(today)))
-                .toList();
+            .map(item -> new ExpiringPantryItem(item, item.daysUntilExpiry(today)))
+            .toList();
     }
 
     @Override
@@ -120,25 +120,27 @@ public class PantryItemService implements
         return saveAndPublishEvents(item);
     }
 
-    /** Loads an item of the current household; items of other households count as not found. */
+    /**
+     * Loads an item of the current household; items of other households count as not found.
+     */
     private PantryItem load(PantryItemId id) {
         HouseholdId household = currentHousehold.require();
         return repository.findById(id)
-                .filter(item -> item.belongsTo(household))
-                .orElseThrow(() -> new PantryItemNotFoundException(id));
+            .filter(item -> item.belongsTo(household))
+            .orElseThrow(() -> new PantryItemNotFoundException(id));
     }
 
     private StorageLocationId defaultLocation(HouseholdId household) {
         return storageLocationRepository.findDefault(household)
-                .orElseThrow(() -> new IllegalStateException("household " + household + " has no default location"))
-                .getStorageLocationId();
+            .orElseThrow(() -> new IllegalStateException("household " + household + " has no default location"))
+            .getStorageLocationId();
     }
 
     private StorageLocationId requireLocationOf(HouseholdId household, StorageLocationId locationId) {
         return storageLocationRepository.findById(locationId)
-                .filter(location -> location.belongsTo(household))
-                .orElseThrow(() -> new StorageLocationNotFoundException(locationId))
-                .getStorageLocationId();
+            .filter(location -> location.belongsTo(household))
+            .orElseThrow(() -> new StorageLocationNotFoundException(locationId))
+            .getStorageLocationId();
     }
 
     /**

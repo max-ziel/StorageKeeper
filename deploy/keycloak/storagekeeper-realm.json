@@ -8,7 +8,6 @@
   "passwordPolicy": "length(12) and notUsername",
   "accessTokenLifespan": 300,
   "clients": [
-    
     {
       "clientId": "storagekeeper-web",
       "name": "StorageKeeper (Browser)",

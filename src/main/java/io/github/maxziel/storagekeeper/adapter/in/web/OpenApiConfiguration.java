@@ -29,22 +29,22 @@ class OpenApiConfiguration {
         // The browser talks to Keycloak directly, so these are the public URLs of the issuer.
         String openIdConnect = issuerUri + "/protocol/openid-connect";
         return new OpenAPI()
-                .info(new Info()
-                        .title("StorageKeeper API")
-                        .description("Vorräte, Lagerorte und Einkaufsliste eines Haushalts verwalten.")
-                        .version("v1"))
-                .components(new Components()
-                        .addSecuritySchemes(KEYCLOAK, new SecurityScheme()
-                                .type(SecurityScheme.Type.OAUTH2)
-                                .flows(new OAuthFlows().authorizationCode(new OAuthFlow()
-                                        .authorizationUrl(openIdConnect + "/auth")
-                                        .tokenUrl(openIdConnect + "/token"))))
-                        .addSecuritySchemes(BEARER_AUTH, new SecurityScheme()
-                                .type(SecurityScheme.Type.HTTP)
-                                .scheme("bearer")
-                                .bearerFormat("JWT")))
-                // Two separate requirements: either of them is enough.
-                .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
-                .addSecurityItem(new SecurityRequirement().addList(KEYCLOAK));
+            .info(new Info()
+                .title("StorageKeeper API")
+                .description("Vorräte, Lagerorte und Einkaufsliste eines Haushalts verwalten.")
+                .version("v1"))
+            .components(new Components()
+                .addSecuritySchemes(KEYCLOAK, new SecurityScheme()
+                    .type(SecurityScheme.Type.OAUTH2)
+                    .flows(new OAuthFlows().authorizationCode(new OAuthFlow()
+                        .authorizationUrl(openIdConnect + "/auth")
+                        .tokenUrl(openIdConnect + "/token"))))
+                .addSecuritySchemes(BEARER_AUTH, new SecurityScheme()
+                    .type(SecurityScheme.Type.HTTP)
+                    .scheme("bearer")
+                    .bearerFormat("JWT")))
+            // Two separate requirements: either of them is enough.
+            .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
+            .addSecurityItem(new SecurityRequirement().addList(KEYCLOAK));
     }
 }

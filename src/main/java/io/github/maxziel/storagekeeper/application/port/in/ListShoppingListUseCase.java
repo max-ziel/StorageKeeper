@@ -5,6 +5,8 @@ package io.github.maxziel.storagekeeper.application.port.in;
  */
 public interface ListShoppingListUseCase {
 
-    /** Returns both sections of the list, each oldest first. */
+    /**
+     * Returns both sections of the list, each oldest first.
+     */
     ShoppingList getShoppingList();
 }

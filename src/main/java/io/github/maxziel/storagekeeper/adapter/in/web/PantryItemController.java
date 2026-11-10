@@ -33,12 +33,12 @@ class PantryItemController {
     private final ChangeMinimumAmountUseCase changeMinimumAmount;
 
     PantryItemController(
-            AddPantryItemUseCase addPantryItem,
-            ListPantryItemUseCase listPantryItems,
-            ChangeQuantityUseCase changeQuantity,
-            RemovePantryItemUseCase removePantryItem,
-            ListExpiringPantryItemsUseCase listExpiringPantryItems,
-            ChangeMinimumAmountUseCase changeMinimumAmount
+        AddPantryItemUseCase addPantryItem,
+        ListPantryItemUseCase listPantryItems,
+        ChangeQuantityUseCase changeQuantity,
+        RemovePantryItemUseCase removePantryItem,
+        ListExpiringPantryItemsUseCase listExpiringPantryItems,
+        ChangeMinimumAmountUseCase changeMinimumAmount
     ) {
         this.addPantryItem = addPantryItem;
         this.listPantryItems = listPantryItems;
@@ -60,31 +60,33 @@ class PantryItemController {
      * One page of items, sorted by name. All filters are optional and combined with AND.
      *
      * @param storageLocationId only items in this location
-     * @param belowMinimum {@code true} = only items below their minimum
+     * @param belowMinimum      {@code true} = only items below their minimum
      */
     @GetMapping
     PageResponse<PantryItemResponse> list(
-            @RequestParam(required = false) UUID storageLocationId,
-            @RequestParam(defaultValue = "false") boolean belowMinimum,
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(PageQuery.MAX_SIZE) int size
+        @RequestParam(required = false) UUID storageLocationId,
+        @RequestParam(defaultValue = "false") boolean belowMinimum,
+        @RequestParam(defaultValue = "0") @Min(0) int page,
+        @RequestParam(defaultValue = "20") @Min(1) @Max(PageQuery.MAX_SIZE) int size
     ) {
         PantryItemFilter filter = new PantryItemFilter(
-                storageLocationId == null ? null : new StorageLocationId(storageLocationId),
-                belowMinimum
+            storageLocationId == null ? null : new StorageLocationId(storageLocationId),
+            belowMinimum
         );
 
         return PageResponse.from(
-                listPantryItems.search(filter, new PageQuery(page, size)).map(PantryItemResponse::from)
+            listPantryItems.search(filter, new PageQuery(page, size)).map(PantryItemResponse::from)
         );
     }
 
-    /** Items that expire within the next {@code days} days or have already expired, earliest first. */
+    /**
+     * Items that expire within the next {@code days} days or have already expired, earliest first.
+     */
     @GetMapping("/expiring")
     List<ExpiringPantryItemResponse> listExpiring(@RequestParam(defaultValue = "7") @Min(0) @Max(365) int days) {
         return listExpiringPantryItems.listExpiringWithin(days).stream()
-                .map(ExpiringPantryItemResponse::from)
-                .toList();
+            .map(ExpiringPantryItemResponse::from)
+            .toList();
     }
 
     @PatchMapping("/{id}/quantity")

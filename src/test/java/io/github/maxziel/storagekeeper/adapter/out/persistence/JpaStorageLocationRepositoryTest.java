@@ -55,8 +55,8 @@ class JpaStorageLocationRepositoryTest {
         repository.save(StorageLocation.create(otherHousehold.id(), new LocationName("Garage")));
 
         List<String> names = repository.findAll(household.id()).stream()
-                .map(location -> location.getLocationName().value())
-                .toList();
+            .map(location -> location.getLocationName().value())
+            .toList();
 
         assertThat(names).containsExactly("Keller", "Kühlschrank", "Vorrat");
     }

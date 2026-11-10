@@ -21,12 +21,16 @@ import java.util.Optional;
  */
 public interface PantryItemRepository {
 
-    /** Inserts or replaces the item and returns it */
+    /**
+     * Inserts or replaces the item and returns it
+     */
     PantryItem save(PantryItem pantryItem);
 
     Optional<PantryItem> findById(PantryItemId pantryItemId);
 
-    /** Loads all items with the given ids; unknown ids are skipped. */
+    /**
+     * Loads all items with the given ids; unknown ids are skipped.
+     */
     List<PantryItem> findAllById(Collection<PantryItemId> pantryItemIds);
 
     /**
