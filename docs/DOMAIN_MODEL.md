@@ -1,7 +1,11 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M6 (Betrieb: Container-Image und Deployment mit Docker Compose, Health-Probes, Metriken mit Prometheus und
+Stand: M7 Teil 4 (Nacharbeiten aus dem zweiten Audit: Swagger-Client im Dev-Realm, `409` nur bei Unique-Verletzung,
+Image-Versionen nur aus Git-Tags); Teil 3 (Betrieb und Sicherheit: Produktions-Realm ohne Testnutzer, Swagger-Login per PKCE, eigene
+Datenbank-Logins, Version 0.7.0, zusätzliche ArchUnit-Regeln); Teil 2 (Fehlerbehandlung: `DomainValidationException`, Konflikte paralleler Requests als `409`, Programmfehler
+als `500` ohne interne Details; Teil 1: Doku an den Code angeglichen, Transaktionsregel, Build und CI);
+davor M6 (Betrieb: Container-Image und Deployment mit Docker Compose, Health-Probes, Metriken mit Prometheus und
 strukturiertes Logging; Haushalte: jeder
 Nutzer sieht nur den Vorrat seines Haushalts; API nur mit JWT erreichbar; Einkaufsliste mit Vorratseinkäufen über
 Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL).
@@ -127,6 +131,8 @@ classDiagram
     }
 
     class InviteCode {
+        +int GROUP_SIZE$
+        +int LENGTH$
         +String value
         +generate()$ InviteCode
     }
@@ -188,6 +194,12 @@ classDiagram
     PantryItemFellBelowMinimum ..|> DomainEvent
     PantryItemReachedMinimum ..|> DomainEvent
     PantryItem ..> DomainEvent : erzeugt
+
+    class DomainValidationException {
+        <<exception>>
+    }
+    class IllegalArgumentException
+    DomainValidationException --|> IllegalArgumentException
 ```
 
 ## Klassen im Detail
@@ -207,7 +219,7 @@ Ein Produkt im Vorrat, z. B. „1 kg Reis, haltbar bis 01.03.2027“.
 | `minimumAmount`     | `BigDecimal`        | ja      | Mindestbestand in der Einheit des Artikels, ≥ 0; `0` = kein Mindestbestand (Standard) |
 
 - **Anlegen:** `PantryItem.create(...)` erzeugt eine neue ID. Der öffentliche Konstruktor ist für das
-  Wiederherstellen eines vorhandenen Artikels mit bekannter ID gedacht (z. B. später aus der Datenbank).
+  Wiederherstellen eines vorhandenen Artikels mit bekannter ID gedacht (z. B. beim Laden aus der Datenbank).
 - **Ändern:** `changeQuantity(newAmount)` setzt eine neue Menge; die Einheit bleibt gleich.
   Eine negative Menge wird von `Quantity` abgelehnt.
 - **Auffüllen:** `restock(purchasedAmount)` addiert eine gekaufte Menge zum Bestand (muss > 0 sein).
@@ -229,7 +241,7 @@ Ein Produkt im Vorrat, z. B. „1 kg Reis, haltbar bis 01.03.2027“.
 ### `PantryItemId` – Value Object
 
 Kapselt eine `UUID`. Ein eigener Typ statt einer nackten `UUID` verhindert, dass IDs verschiedener
-Entities verwechselt werden, sobald es weitere gibt (z. B. Lagerorte in M3).
+Entities verwechselt werden, z. B. eine `PantryItemId` mit einer `StorageLocationId`.
 
 | Feld    | Typ    | Regel        |
 |---------|--------|--------------|
@@ -320,6 +332,8 @@ Etwas, das der Nutzer selbst auf die Liste schreibt, z. B. „Geburtstagskerzen�
 | `quantity`                  | `Quantity`                  | nein    | `null` = ohne Mengenangabe; wenn gesetzt, > 0 |
 | `addedAt`                   | `Instant`                   | ja      | Zeitpunkt, an dem der Eintrag entstand        |
 
+- **Gleichheit:** nur über `manualShoppingListEntryId`, wie bei allen Entities per `instanceof`.
+
 **Warum eine eigene Klasse statt `ShoppingListEntry` mit optionalem Artikel?** Die beiden verhalten sich
 verschieden: Ein Vorratseinkauf entsteht und verschwindet automatisch und ändert beim Abhaken den Bestand,
 ein manueller Eintrag wird vom Nutzer angelegt und beim Abhaken einfach gelöscht. Mit einer Klasse bräuchte
@@ -359,9 +373,19 @@ Eine Gruppe von Nutzern, die einen Vorrat teilen: Artikel, Lagerorte und Einkauf
 
 - **Warum `sub` und nicht der Benutzername?** Den Benutzernamen kann man in Keycloak ändern; `sub` bleibt gleich.
   Nutzer werden nur im Identity Provider verwaltet, die App speichert nur, wer in welchem Haushalt ist.
-- **Einladungscode:** `InviteCode.generate()` zieht 8 Zeichen mit `SecureRandom` aus 32 möglichen, also etwa
-  10¹² Codes; erraten ist praktisch ausgeschlossen. Verwechselbare Zeichen fehlen, damit man den Code auch
+- **Einladungscode:** `InviteCode.generate()` zieht 2 × `GROUP_SIZE` = 8 Zeichen mit `SecureRandom` aus 32
+  möglichen, also etwa 10¹² Codes; erraten ist praktisch ausgeschlossen. `LENGTH` (9, mit Bindestrich) nutzt
+  auch die Spalte `household.invite_code`. Verwechselbare Zeichen fehlen, damit man den Code auch
   vorlesen oder abtippen kann.
+
+### `DomainValidationException` – Exception
+
+Alle Prüfungen der Value Objects und Entities (z. B. „Name nicht leer“, „Menge nicht negativ“) werfen
+`DomainValidationException`. Sie erweitert `IllegalArgumentException`, die Meldung ist für den Client geschrieben.
+Der Web-Adapter macht daraus `400`; jede andere `IllegalArgumentException` gilt als Programmfehler (`500`), damit keine
+internen Texte aus Bibliotheken beim Client landen. Auch die Application nutzt sie für Eingaberegeln
+(`PageQuery`, `days` bei `/expiring`). Fehlende Pflichtwerte (`null`) bleiben `NullPointerException` aus
+`Objects.requireNonNull`: Die Adapter prüfen sie vorher, im Code wären sie ein Programmfehler.
 
 ### Domain-Events
 
@@ -426,8 +450,8 @@ sequenceDiagram
 
 **Warum Events statt eines direkten Aufrufs?** `PantryItemService` müsste sonst die Einkaufsliste kennen und
 bei jeder Mengenänderung selbst entscheiden, ob dort etwas zu tun ist. Mit Events meldet der Artikel nur
-„ich bin unter Minimum“, und wer sich dafür interessiert, reagiert. In M5/M6 können weitere Reaktionen
-(z. B. eine Benachrichtigung) dazukommen, ohne den bestehenden Code anzufassen.
+„ich bin unter Minimum“, und wer sich dafür interessiert, reagiert. So kam in M6 der Metrik-Zähler
+(`DomainEventMetrics`) dazu, ohne den Service anzufassen; eine Benachrichtigung ginge genauso.
 
 **Wie die Teile zusammenhängen:**
 
@@ -438,8 +462,16 @@ bei jeder Mengenänderung selbst entscheiden, ob dort etwas zu tun ist. Mit Even
   Er übersetzt nur und enthält keine Regeln.
 - `ShoppingListService` legt Einträge an (nur, wenn noch keiner existiert) und entfernt sie.
 
-**Transaktionen:** `PantryItemService.add`, `changeQuantity` und `changeMinimumAmount` sind `@Transactional`.
-Spring ruft die Listener synchron im selben Thread auf, deshalb laufen Änderung am Artikel und Änderung an der
+**Transaktionen:** Die Grenze setzt immer der Use Case, also die öffentliche Methode des Services:
+
+| Art der Methode    | Annotation                                                        | Beispiele                                                                                      |
+|--------------------|-------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| ändernder Use Case | `@Transactional`                                                  | `PantryItemService.changeQuantity`, `StorageLocationService.add`, `HouseholdService.join`      |
+| lesender Use Case  | `@Transactional(readOnly = true)`                                 | `PantryItemService.search`, `StorageLocationService.listAll`, `ShoppingListService.getShoppingList` |
+| Repository-Adapter | nur, wo mehrere Statements zusammengehören oder Spring Data es verlangt | `JpaPantryItemRepository.deleteById`, `JpaShoppingListRepository.deleteByPantryItemId`  |
+
+Ein `@Transactional` im Adapter schließt sich der Transaktion des Use Cases an (Propagation `REQUIRED`) und startet
+keine eigene. Spring ruft die Listener synchron im selben Thread auf, deshalb laufen Änderung am Artikel und Änderung an der
 Einkaufsliste in **einer** Transaktion: Schlägt das Anlegen des Eintrags fehl, wird auch die Mengenänderung
 zurückgerollt. Artikel und Liste können so nicht auseinanderlaufen.
 
@@ -510,8 +542,9 @@ oder schon abgelaufen sind, sortiert nach Ablaufdatum. Artikel ohne Ablaufdatum 
 - **In Tests** wird eine feste Uhr übergeben (`Clock.fixed(...)`). „Heute“ ist dann immer derselbe Tag,
   und Tests wie „läuft in 3 Tagen ab“ liefern an jedem Tag dasselbe Ergebnis.
 
-`Clock` ist Teil des JDK, deshalb braucht es dafür kein eigenes Port-Interface: Die Application hängt
-weiterhin nur vom JDK ab, nicht von Spring.
+`Clock` ist Teil des JDK, deshalb braucht es dafür kein eigenes Port-Interface; die Application bekommt dadurch
+keine neue Abhängigkeit. Von Spring nutzt die Application bewusst nur die Annotationen für das Verdrahten
+(`@Service`, `@Component`) und für Transaktionen (`@Transactional`); Ports und fachliche Logik kennen Spring nicht.
 
 Ablauf einer Abfrage:
 
@@ -560,8 +593,8 @@ sequenceDiagram
     participant F as Spring Security (Filter)
     participant W as Controller
 
-    C->>K: Benutzername + Passwort
-    K-->>C: JWT (signiert, 1 h gültig)
+    C->>K: Anmeldung im Browser (Authorization Code + PKCE)
+    K-->>C: JWT (signiert, 5 min gültig, lokal 1 h)
     C->>F: GET /api/... mit Authorization: Bearer JWT
     F->>K: öffentliche Schlüssel holen (nur beim ersten Mal, dann gecacht)
     F->>F: Signatur, Ablauf, Issuer und Audience prüfen
@@ -590,6 +623,21 @@ sequenceDiagram
   Security-Filter vor Spring MVC läuft und `@RestControllerAdvice` die Exception sonst nie zu sehen bekäme.
   `detail` ist bei fehlendem Token „A valid bearer token is required.“, bei ungültigem Token der Grund
   (z. B. abgelaufen).
+
+**Clients in Keycloak:**
+
+| Client              | Realm                  | Ablauf                                   | Zweck                                         |
+|---------------------|------------------------|------------------------------------------|-----------------------------------------------|
+| `storagekeeper-web` | Entwicklung, Produktion | Authorization Code mit PKCE (`S256`), öffentlich | Anmeldung im Browser, z. B. Swagger UI |
+| `storagekeeper-cli` | nur Entwicklung        | Passwort-Grant                           | Tokens per `curl` für Tests von Hand          |
+
+Der Passwort-Grant ist in OAuth 2.1 abgeschafft: Die Anwendung bekäme das Passwort zu sehen. Deshalb gibt es ihn nur im
+Entwicklungs-Realm mit den Testnutzern. Beide Clients fügen per Audience-Mapper `storagekeeper-api` in `aud` ein.
+Die erlaubte Redirect-URI des Produktions-Clients setzt Keycloak beim Import aus `STORAGEKEEPER_URL` ein
+(Platzhalter `${STORAGEKEEPER_URL:http://localhost:8080}` in der Realm-Datei). `KeycloakRealmFilesTest` prüft ohne
+Keycloak, dass beide Realm-Dateien den Client enthalten, den `springdoc.swagger-ui.oauth.client-id` nennt (PKCE,
+Redirect auf die Swagger UI, Audience aus `application.yaml`), und dass der Produktions-Realm keine Nutzer und keinen
+Passwort-Grant hat.
 
 Der Filter prüft nur, **wer** der Nutzer ist (Authentifizierung). **Was** er sehen darf (Autorisierung),
 entscheidet der Application-Layer, siehe nächster Abschnitt.
@@ -664,8 +712,18 @@ sequenceDiagram
 ## API-Dokumentation
 
 springdoc erzeugt aus den Controllern ein OpenAPI-3-Dokument (`/v3/api-docs`) und die Swagger UI (`/swagger-ui.html`).
-`adapter.in.web.OpenApiConfiguration` ergänzt nur Titel und Beschreibung und meldet das Bearer-Schema an,
-damit die Swagger UI einen „Authorize“-Knopf zeigt. Die Gruppen in der Swagger UI kommen aus `@Tag` an den Controllern.
+`adapter.in.web.OpenApiConfiguration` ergänzt Titel und Beschreibung und meldet zwei Sicherheitsschemata an, von
+denen eins genügt:
+
+| Schema       | Typ                               | Woher                                                                 |
+|--------------|-----------------------------------|-----------------------------------------------------------------------|
+| `bearerAuth` | HTTP Bearer                       | Token von Hand einfügen                                               |
+| `keycloak`   | OAuth2, Authorization Code        | `authorizationUrl`/`tokenUrl` aus `issuer-uri` + `/protocol/openid-connect/auth` bzw. `/token` |
+
+Die Swagger UI füllt die Client-ID aus `springdoc.swagger-ui.oauth.client-id` (`storagekeeper-web`) und nutzt PKCE
+(`use-pkce-with-authorization-code-grant`). Der Browser spricht Keycloak direkt an, deshalb sind die URLs die
+öffentlichen des Issuers. `STORAGEKEEPER_API_DOCS_ENABLED=false` schaltet `springdoc.api-docs.enabled` und
+`springdoc.swagger-ui.enabled` ab; beide Pfade ergeben dann `404` (`ApiDocsDisabledIntegrationTest`). Die Gruppen in der Swagger UI kommen aus `@Tag` an den Controllern.
 
 ## Betrieb: Health, Metriken, Logging
 
@@ -750,7 +808,7 @@ flowchart LR
     subgraph Net["Docker Compose: deploy/compose.yaml"]
         App["app<br/>ghcr.io/max-ziel/storagekeeper"]
         KC["keycloak"]
-        PG[("postgres<br/>DBs storagekeeper, keycloak")]
+        PG[("postgres<br/>DB storagekeeper (Login storagekeeper)<br/>DB keycloak (Login keycloak)")]
         Prom["prometheus<br/>(Profil monitoring)"]
         App -->|JDBC| PG
         KC -->|JDBC| PG
@@ -769,6 +827,12 @@ flowchart LR
   (`KC_HOSTNAME`). Im Container zeigt `localhost` aber auf den Container selbst. Mit
   `spring.security.oauth2.resourceserver.jwt.jwk-set-uri` holt die App die Schlüssel unter `keycloak:8080`
   und prüft `iss` trotzdem gegen `STORAGEKEEPER_ISSUER_URI`; ein Token mit anderem Issuer ergibt `401`.
+- **Getrennte Datenbank-Logins:** `deploy/postgres/init-databases.sh` legt beim ersten Start je Dienst eine Datenbank
+  mit eigenem Login ohne Superuser-Rechte an. Eine Lücke in der App gibt so keinen Zugriff auf die Passwort-Hashes in
+  Keycloaks Datenbank, und umgekehrt.
+- **Eigener Realm für den Betrieb:** `deploy/keycloak` statt `dev/keycloak`: keine Nutzer, kein Passwort-Grant,
+  Passwortregel und Brute-Force-Schutz, 5 Minuten Token-Laufzeit.
+- **Begrenzte Logs:** Der `json-file`-Treiber hält höchstens 5 × 10 MB; die Logs enthalten pseudonyme Nutzer-IDs.
 - **Nur zwei Ports veröffentlicht:** `8080` und `8180`. Der Actuator-Port `8081` ist nur im Compose-Netz
   erreichbar, Prometheus nur auf `127.0.0.1`.
 
@@ -807,28 +871,46 @@ flowchart LR
 - Abhängigkeiten zeigen immer nach innen: Adapter → Application → Domain.
 - Die Application kennt nur die Interfaces in `port.out`, nicht deren Implementierung.
 
+`ArchitectureTest` prüft das mit ArchUnit:
+
+| Regel                                             | Inhalt                                                                                      |
+|---------------------------------------------------|---------------------------------------------------------------------------------------------|
+| `portsAndAdapters`                                | Onion-Architektur: Domain ← Application ← Adapter; `config` zählt wie ein Adapter            |
+| `domainIsFrameworkFree`                           | `domain` hängt nicht von Spring oder Jakarta ab                                             |
+| `applicationUsesSpringOnlyForWiringAndTransactions` | `application` nutzt von Spring nur `stereotype` und `transaction.annotation`, kein Jakarta |
+| `shoppingListIsOnlyUpdatedFromDomainEvents`       | `UpdateShoppingListUseCase` prüft keinen Haushalt; nur `adapter.in.event` darf ihn aufrufen |
+
 Beim Wechsel von der In-Memory-Liste (M1) auf PostgreSQL (M2) haben sich Service und Domain deshalb nicht geändert.
 
 ## Ablauf eines Requests
 
-Beispiel: Menge ändern.
+Beispiel: Menge ändern. Die Token-Prüfung zeigt „Wo die Prüfung stattfindet“ (Abschnitt „Haushalte und
+Autorisierung“), die Reaktion der Einkaufsliste „Vorratseinkäufe entstehen automatisch“.
 
 ```mermaid
 sequenceDiagram
   participant C as Client
   participant W as PantryItemController
   participant S as PantryItemService
+  participant H as CurrentHousehold
   participant R as PantryItemRepository
   participant P as PantryItem
+  participant E as DomainEventPublisher
 
   C->>W: PATCH /api/pantry-items/{id}/quantity {"amount": 0.5}
   W->>W: @Valid prüft ChangeQuantityRequest
   W->>S: changeQuantity(PantryItemId, 0.5)
+  Note over S,E: eine Transaktion (@Transactional)
+  S->>H: require()
+  H-->>S: HouseholdId (sonst 403)
   S->>R: findById(id)
   R-->>S: Optional<PantryItem>
+  S->>P: belongsTo(household)? sonst 404
   S->>P: changeQuantity(0.5)
-  P->>P: Quantity prüft amount ≥ 0
+  P->>P: Quantity prüft amount ≥ 0, merkt sich ggf. ein Event
   S->>R: save(item)
+  S->>P: pullDomainEvents()
+  S->>E: publish(events)
   S-->>W: PantryItem
   W-->>C: 200 PantryItemResponse (JSON)
 ```
@@ -859,8 +941,9 @@ sequenceDiagram
 | `inviteCode`                    | `getInviteCode().value()`                             |
 | `members`                       | Namen aus `getMembers()`; die User-IDs bleiben intern |
 
-`ExpiringPantryItemResponse` (für `/expiring`) enthält dieselben Felder wie `PantryItemResponse`
-plus `daysUntilExpiry` (aus `ExpiringPantryItem.daysUntilExpiry()`) und `expired` (aus `expired()`).
+`ExpiringPantryItemResponse` (für `/expiring`) enthält eine `PantryItemResponse` mit `@JsonUnwrapped`: Deren Felder
+stehen im JSON auf derselben Ebene, und ein neues Feld dort erscheint hier automatisch. Dazu kommen
+`daysUntilExpiry` (aus `ExpiringPantryItem.daysUntilExpiry()`) und `expired` (aus `expired()`).
 
 Die Request-DTOs (`AddPantryItemRequest`, `ChangeQuantityRequest`) prüfen Eingaben bereits per Bean Validation,
 damit der Client verständliche Fehler bekommt. Die Domain prüft trotzdem selbst; sie ist die eigentliche Absicherung.
@@ -872,7 +955,7 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Ursache                                                                 | HTTP-Status |
 |-------------------------------------------------------------------------|-------------|
 | Ungültiger Request (Bean Validation, unbekannte `unit`, kaputtes JSON)  | 400         |
-| Domain-Regel verletzt (`IllegalArgumentException`)                      | 400         |
+| Domain-Regel verletzt (`DomainValidationException`)                     | 400         |
 | Artikel-ID unbekannt (`PantryItemNotFoundException`)                    | 404         |
 | Lagerort im Request unbekannt (`StorageLocationNotFoundException`)      | 400         |
 | Lagerort-Name existiert schon (`StorageLocationAlreadyExistsException`) | 409         |
@@ -881,6 +964,28 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Nutzer ohne Haushalt (`NoHouseholdException`)                           | 403         |
 | Schon Mitglied eines Haushalts (`AlreadyInHouseholdException`)          | 409         |
 | Einladungscode unbekannt (`UnknownInviteCodeException`)                 | 400         |
+| Unique-Constraint verletzt (SQL-State `23505`, `DuplicateKeyException`) | 409         |
+| anderer DB-Constraint verletzt (CHECK, NOT NULL, Fremdschlüssel)        | 500         |
+| alles andere, z. B. `IllegalStateException` (Programmfehler)            | 500         |
+
+`ApiExceptionHandler` erweitert Springs `ResponseEntityExceptionHandler`. Dieser beantwortet die Fehler von Spring MVC
+selbst (kaputtes JSON, Bean Validation, unbekannter Pfad, falsche Methode) mit dem passenden Status; ohne ihn würde
+der Auffang-Handler für `Exception` auch diese zu `500` machen.
+
+**Parallele Requests:** Die Services prüfen Eindeutigkeit vorher (Lagerort-Name, „schon in einem Haushalt“), damit der
+Client eine genaue Meldung bekommt. Zwischen Prüfung und Einfügen liegt aber eine Lücke: Zwei gleichzeitige Requests
+können beide die Prüfung bestehen. Dann lehnt die Datenbank den zweiten ab (`uq_storage_location_household_name`,
+Primärschlüssel von `household_member`, `UNIQUE invite_code`), und der Client bekommt `409` mit einer allgemeinen
+Meldung („Please reload and try again“). Die Datenbank-Meldung nennt Tabellen und Spalten, deshalb steht sie nur im
+Log (`WARN`). `ConcurrentRequestsIntegrationTest` erzwingt diese Lücke mit einer `CyclicBarrier` im Repository-Spy.
+
+Nur Unique-Verletzungen sind solche Konflikte. CHECK-, NOT-NULL- und Fremdschlüssel-Constraints sichern Regeln, die
+Domain und Services schon vorher prüfen; schlägt einer an, ist das ein Programmfehler und ergibt `500` mit
+`ERROR`-Log. Erkannt wird die Unique-Verletzung am SQL-State `23505` in der Ursachenkette, denn über Hibernate kommt
+sie als allgemeine `DataIntegrityViolationException` an, nicht als Springs `DuplicateKeyException`.
+
+**Programmfehler** (`500`) werden mit Stacktrace als `ERROR` geloggt; der Client bekommt nur
+„An unexpected error occurred.“
 
 Artikel, Lagerorte und Einträge eines anderen Haushalts behandeln die Services wie unbekannte IDs
 (`404`, beim Lagerort im Request `400`).
@@ -1013,29 +1118,29 @@ Datenbank bis V6, füllt sie und migriert dann weiter.
 
 ```mermaid
 classDiagram
-  direction LR
+    direction LR
 
-  class PantryItem {
-    Domain, ohne JPA
-  }
-  class PantryItemJpaEntity {
-    -UUID id
-    -String name
-    -BigDecimal amount
-    -Unit unit
-    -LocalDate expiryDate
-    ~fromDomain(PantryItem item)$ PantryItemJpaEntity
-    ~toDomain() PantryItem
-  }
-  class SpringDataPantryItemRepository {
-    JpaRepository von PantryItemJpaEntity und UUID
-  }
-  class JpaPantryItemRepository
+    class PantryItem {
+        Domain, ohne JPA
+    }
+    class PantryItemJpaEntity {
+        -UUID id
+        -String name
+        -BigDecimal amount
+        -Unit unit
+        -LocalDate expiryDate
+        ~fromDomain(PantryItem item)$ PantryItemJpaEntity
+        ~toDomain() PantryItem
+    }
+    class SpringDataPantryItemRepository {
+        JpaRepository von PantryItemJpaEntity und UUID
+    }
+    class JpaPantryItemRepository
 
-  JpaPantryItemRepository ..|> PantryItemRepository
-  JpaPantryItemRepository --> SpringDataPantryItemRepository
-  SpringDataPantryItemRepository --> PantryItemJpaEntity
-  PantryItemJpaEntity ..> PantryItem : mappt
+    JpaPantryItemRepository ..|> PantryItemRepository
+    JpaPantryItemRepository --> SpringDataPantryItemRepository
+    SpringDataPantryItemRepository --> PantryItemJpaEntity
+    PantryItemJpaEntity ..> PantryItem : mappt
 ```
 
 JPA verlangt einen parameterlosen Konstruktor und veränderbare Felder. Würde `PantryItem` selbst

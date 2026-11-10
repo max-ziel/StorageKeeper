@@ -16,29 +16,41 @@ import java.util.regex.Pattern;
  */
 public record InviteCode(String value) {
 
+    /**
+     * Characters per group; a code has two groups.
+     */
+    public static final int GROUP_SIZE = 4;
+    /**
+     * Length of a code including the dash, e.g. 9 for {@code K7M2-QX9P}.
+     */
+    public static final int LENGTH = 2 * GROUP_SIZE + 1;
+
     static final String ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    private static final Pattern FORMAT = Pattern.compile("[" + ALPHABET + "]{4}-[" + ALPHABET + "]{4}");
+    private static final String GROUP = "[" + ALPHABET + "]{" + GROUP_SIZE + "}";
+    private static final Pattern FORMAT = Pattern.compile(GROUP + "-" + GROUP);
     private static final RandomGenerator RANDOM = new SecureRandom();
 
     public InviteCode {
         if (value == null) {
-            throw new IllegalArgumentException("invite code must not be null");
+            throw new DomainValidationException("invite code must not be null");
         }
         value = value.strip().toUpperCase(Locale.ROOT);
         if (!FORMAT.matcher(value).matches()) {
-            throw new IllegalArgumentException("invite code must look like XXXX-XXXX");
+            throw new DomainValidationException("invite code must look like XXXX-XXXX");
         }
     }
 
-    /** Creates a new random code. */
+    /**
+     * Creates a new random code.
+     */
     public static InviteCode generate() {
         return generate(RANDOM);
     }
 
     static InviteCode generate(RandomGenerator random) {
-        StringBuilder code = new StringBuilder(9);
-        for (int i = 0; i < 8; i++) {
-            if (i == 4) {
+        StringBuilder code = new StringBuilder(LENGTH);
+        for (int i = 0; i < 2 * GROUP_SIZE; i++) {
+            if (i == GROUP_SIZE) {
                 code.append('-');
             }
             code.append(ALPHABET.charAt(random.nextInt(ALPHABET.length())));

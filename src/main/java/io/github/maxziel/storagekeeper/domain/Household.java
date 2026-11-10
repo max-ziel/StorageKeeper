@@ -11,7 +11,7 @@ import java.util.Objects;
  * <p>Invariants: no user is listed twice. That a user belongs to at most one household is a rule across
  * households; it is checked by {@code HouseholdService} and secured by the database.
  */
-public class Household {
+public final class Household {
 
     private final HouseholdId householdId;
     private final HouseholdName name;
@@ -31,7 +31,9 @@ public class Household {
         Objects.requireNonNull(members, "members must not be null").forEach(this::join);
     }
 
-    /** Creates a new household with a fresh id; the founder is its first member. */
+    /**
+     * Creates a new household with a fresh id; the founder is its first member.
+     */
     public static Household found(HouseholdName name, HouseholdMember founder, InviteCode inviteCode) {
         return new Household(HouseholdId.newId(), name, inviteCode, List.of(founder));
     }
@@ -65,7 +67,9 @@ public class Household {
         return inviteCode;
     }
 
-    /** The members in the order they joined; unmodifiable. */
+    /**
+     * The members in the order they joined; unmodifiable.
+     */
     public List<HouseholdMember> getMembers() {
         return List.copyOf(members);
     }

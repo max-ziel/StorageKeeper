@@ -26,31 +26,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 @Configuration
 class SecurityConfiguration {
 
-    @Bean
-    SecurityFilterChain apiSecurity(HttpSecurity http,
-                                    @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) {
-        return http
-                .authorizeHttpRequests(requests -> requests
-                        // Health probes on the main port (management.endpoint.health.probes.add-additional-paths).
-                        .requestMatchers("/livez", "/readyz").permitAll()
-                        // Only used if the management port is set to the main port: then health and info stay
-                        // public, and metrics need a token like the API.
-                        .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
-                        .anyRequest().authenticated())
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(Customizer.withDefaults())
-                        .authenticationEntryPoint(problemDetailEntryPoint(exceptionResolver)))
-                // Not a @Component: Spring Boot would register it a second time as a filter outside the chain.
-                .addFilterAfter(new UserLoggingContextFilter(), BearerTokenAuthenticationFilter.class)
-                // Every request carries its own token: no session, and so no session cookie a CSRF attack could use.
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .csrf(AbstractHttpConfigurer::disable)
-                .build();
-    }
-
     /**
-     * Answers a missing or invalid token with {@code 401}. The standard-bearer entry point sets the status and the
+     * Answers a missing or invalid token with {@code 401}. The standard bearer token entry point sets the status and the
      * {@code WWW-Authenticate} header (RFC 6750); the body is written by {@link ApiExceptionHandler}, so a 401 is a
      * {@code ProblemDetail} like every other error. The filter runs before Spring MVC, so the exception is handed
      * to MVC's exception resolver explicitly.
@@ -61,6 +38,29 @@ class SecurityConfiguration {
             bearerEntryPoint.commence(request, response, exception);
             exceptionResolver.resolveException(request, response, null, exception);
         };
+    }
+
+    @Bean
+    SecurityFilterChain apiSecurity(HttpSecurity http,
+                                    @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) {
+        return http
+            .authorizeHttpRequests(requests -> requests
+                // Health probes on the main port (management.endpoint.health.probes.add-additional-paths).
+                .requestMatchers("/livez", "/readyz").permitAll()
+                // Only used if the management port is set to the main port: then health and info stay
+                // public, and metrics need a token like the API.
+                .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
+                .anyRequest().authenticated())
+            .oauth2ResourceServer(resourceServer -> resourceServer
+                .jwt(Customizer.withDefaults())
+                .authenticationEntryPoint(problemDetailEntryPoint(exceptionResolver)))
+            // Not a @Component: Spring Boot would register it a second time as a filter outside the chain.
+            .addFilterAfter(new UserLoggingContextFilter(), BearerTokenAuthenticationFilter.class)
+            // Every request carries its own token: no session, and so no session cookie a CSRF attack could use.
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .csrf(AbstractHttpConfigurer::disable)
+            .build();
     }
 
     /**
@@ -78,11 +78,11 @@ class SecurityConfiguration {
         @Order(1)
         SecurityFilterChain managementSecurity(HttpSecurity http) {
             return http
-                    .securityMatcher(EndpointRequest.toAnyEndpoint())
-                    .authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
-                    .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                    .csrf(AbstractHttpConfigurer::disable)
-                    .build();
+                .securityMatcher(EndpointRequest.toAnyEndpoint())
+                .authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(AbstractHttpConfigurer::disable)
+                .build();
         }
     }
 }

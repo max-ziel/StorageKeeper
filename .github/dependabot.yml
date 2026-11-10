@@ -1,0 +1,25 @@
+# Weekly pull requests for outdated dependencies. Each one runs the normal CI, so an update that breaks
+# the build is visible before it is merged.
+version: 2
+updates:
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # Patch and minor updates in one pull request instead of one per library.
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+
+  # Images in compose.yaml (development) and deploy/compose.yaml (PostgreSQL, Keycloak, Prometheus).
+  # Keycloak in particular gets security fixes as new image tags.
+  - package-ecosystem: docker-compose
+    directories: [ /, /deploy ]
+    schedule:
+      interval: weekly

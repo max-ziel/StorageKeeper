@@ -14,10 +14,10 @@ public record HouseholdResponse(UUID id, String name, String inviteCode, List<St
 
     static HouseholdResponse from(Household household) {
         return new HouseholdResponse(
-                household.getHouseholdId().value(),
-                household.getName().value(),
-                household.getInviteCode().value(),
-                household.getMembers().stream().map(HouseholdMember::name).toList()
+            household.getHouseholdId().value(),
+            household.getName().value(),
+            household.getInviteCode().value(),
+            household.getMembers().stream().map(HouseholdMember::name).toList()
         );
     }
 }

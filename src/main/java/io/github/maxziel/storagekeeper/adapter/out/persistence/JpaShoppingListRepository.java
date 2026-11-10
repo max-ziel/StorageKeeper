@@ -11,7 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 
-/** Implements the {@link ShoppingListRepository} port with PostgreSQL via Spring Data JPA. */
+/**
+ * Implements the {@link ShoppingListRepository} port with PostgreSQL via Spring Data JPA.
+ */
 @Repository
 class JpaShoppingListRepository implements ShoppingListRepository {
 
@@ -30,8 +32,8 @@ class JpaShoppingListRepository implements ShoppingListRepository {
     @Override
     public List<ShoppingListEntry> findAll(HouseholdId householdId) {
         return jpaRepository.findAllForHousehold(householdId.value()).stream()
-                .map(ShoppingListEntryJpaEntity::toDomain)
-                .toList();
+            .map(ShoppingListEntryJpaEntity::toDomain)
+            .toList();
     }
 
     @Override

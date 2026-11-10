@@ -62,7 +62,9 @@ class HouseholdServiceTest {
     void createDrawsANewCodeIfTheFirstOneIsTaken() {
         Household other = Household.found(new HouseholdName("Andere"), ALICE, InviteCode.generate());
         when(householdRepository.findByMember(BOB.userId())).thenReturn(Optional.empty());
-        when(householdRepository.findByInviteCode(any())).thenReturn(Optional.of(other), Optional.empty());
+        when(householdRepository.findByInviteCode(any()))
+            .thenReturn(Optional.of(other))
+            .thenReturn(Optional.empty());
 
         Household created = service.create(new HouseholdName("WG"));
 
@@ -77,7 +79,7 @@ class HouseholdServiceTest {
         when(householdRepository.findByMember(BOB.userId())).thenReturn(Optional.of(existing));
 
         assertThatExceptionOfType(AlreadyInHouseholdException.class)
-                .isThrownBy(() -> service.create(new HouseholdName("Zweiter")));
+            .isThrownBy(() -> service.create(new HouseholdName("Zweiter")));
         verify(householdRepository, never()).save(any());
         verifyNoInteractions(storageLocationRepository);
     }
@@ -116,18 +118,18 @@ class HouseholdServiceTest {
         when(householdRepository.findByInviteCode(any())).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(UnknownInviteCodeException.class)
-                .isThrownBy(() -> service.join(InviteCode.generate()));
+            .isThrownBy(() -> service.join(InviteCode.generate()));
         verify(householdRepository, never()).save(any());
     }
 
     @Test
     void joinWhenAlreadyInAHouseholdFails() {
         Household own = Household.found(new HouseholdName("Eigener"), new HouseholdMember(BOB.userId(), "bob"),
-                InviteCode.generate());
+            InviteCode.generate());
         when(householdRepository.findByMember(BOB.userId())).thenReturn(Optional.of(own));
 
         assertThatExceptionOfType(AlreadyInHouseholdException.class)
-                .isThrownBy(() -> service.join(InviteCode.generate()));
+            .isThrownBy(() -> service.join(InviteCode.generate()));
         verify(householdRepository, never()).findByInviteCode(any());
         verify(householdRepository, never()).save(any());
     }

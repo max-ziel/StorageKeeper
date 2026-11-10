@@ -13,14 +13,18 @@ public class ShoppingListEntry {
     private final PantryItemId pantryItemId;
     private final Instant addedAt;
 
-    /** Restores an entry with a known id, e.g. when loading it from storage. Use {@link #create} for new entries. */
+    /**
+     * Restores an entry with a known id, e.g. when loading it from storage. Use {@link #create} for new entries.
+     */
     public ShoppingListEntry(ShoppingListEntryId shoppingListEntryId, PantryItemId pantryItemId, Instant addedAt) {
         this.shoppingListEntryId = Objects.requireNonNull(shoppingListEntryId, "id must not be null");
         this.pantryItemId = Objects.requireNonNull(pantryItemId, "pantry item must not be null");
         this.addedAt = Objects.requireNonNull(addedAt, "addedAt must not be null");
     }
 
-    /** Creates a new entry with a freshly generated id. */
+    /**
+     * Creates a new entry with a freshly generated id.
+     */
     public static ShoppingListEntry create(PantryItemId pantryItemId, Instant now) {
         return new ShoppingListEntry(ShoppingListEntryId.newId(), pantryItemId, now);
     }

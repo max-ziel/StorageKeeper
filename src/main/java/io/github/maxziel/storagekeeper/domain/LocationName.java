@@ -10,11 +10,11 @@ public record LocationName(String value) {
 
     public LocationName {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("location name must not be blank");
+            throw new DomainValidationException("location name must not be blank");
         }
         value = value.strip();
         if (value.length() > MAX_LENGTH) {
-            throw new IllegalArgumentException("location name must be at most " + MAX_LENGTH + " characters");
+            throw new DomainValidationException("location name must be at most " + MAX_LENGTH + " characters");
         }
     }
 }

@@ -1,13 +1,10 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
 import io.github.maxziel.storagekeeper.TestcontainersConfiguration;
-import io.github.maxziel.storagekeeper.domain.Household;
-import io.github.maxziel.storagekeeper.domain.HouseholdMember;
-import io.github.maxziel.storagekeeper.domain.HouseholdName;
-import io.github.maxziel.storagekeeper.domain.InviteCode;
-import io.github.maxziel.storagekeeper.domain.UserId;
+import io.github.maxziel.storagekeeper.domain.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -16,6 +13,7 @@ import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
+@Tag("integration")
 @DataJpaTest
 @Import({TestcontainersConfiguration.class, JpaHouseholdRepository.class})
 class JpaHouseholdRepositoryTest {

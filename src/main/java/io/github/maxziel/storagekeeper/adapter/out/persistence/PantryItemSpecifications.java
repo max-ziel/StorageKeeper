@@ -6,28 +6,34 @@ import java.util.UUID;
 
 /**
  * Building blocks for filtered queries on {@link PantryItemJpaEntity}. Each method describes one
- * WHERE condition; {@link JpaPantryItemRepository} combines the ones that arte needed.
+ * WHERE condition; {@link JpaPantryItemRepository} combines the ones that are needed.
  */
-public class PantryItemSpecifications {
+final class PantryItemSpecifications {
 
     private PantryItemSpecifications() {
     }
 
-    /** {@code household_id = ?} */
+    /**
+     * {@code household_id = ?}
+     */
     static Specification<PantryItemJpaEntity> inHousehold(UUID householdId) {
         return (root, _, cb) ->
-                cb.equal(root.get("householdId"), householdId);
+            cb.equal(root.get("householdId"), householdId);
     }
 
-    /** {@code storage_location_id = ?} */
+    /**
+     * {@code storage_location_id = ?}
+     */
     static Specification<PantryItemJpaEntity> inStorageLocation(UUID storageLocationId) {
         return (root, _, cb) ->
-                cb.equal(root.get("storageLocationId"), storageLocationId);
+            cb.equal(root.get("storageLocationId"), storageLocationId);
     }
 
-    /** {@code amount < minimum_amount} */
+    /**
+     * {@code amount < minimum_amount}
+     */
     static Specification<PantryItemJpaEntity> belowMinimum() {
         return (root, _, cb) ->
-                cb.lessThan(root.get("amount"), root.get("minimumAmount"));
+            cb.lessThan(root.get("amount"), root.get("minimumAmount"));
     }
 }

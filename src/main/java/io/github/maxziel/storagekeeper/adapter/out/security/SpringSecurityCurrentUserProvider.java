@@ -23,14 +23,14 @@ class SpringSecurityCurrentUserProvider implements CurrentUserProvider {
     public CurrentUser currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
-                || authentication instanceof AnonymousAuthenticationToken) {
+            || authentication instanceof AnonymousAuthenticationToken) {
             throw new IllegalStateException("no authenticated user");
         }
 
         // For a JwtAuthenticationToken, getName() is the "sub" claim.
         String displayName = authentication.getName();
         if (authentication instanceof JwtAuthenticationToken jwt
-                && jwt.getToken().getClaimAsString(DISPLAY_NAME_CLAIM) != null) {
+            && jwt.getToken().getClaimAsString(DISPLAY_NAME_CLAIM) != null) {
             displayName = jwt.getToken().getClaimAsString(DISPLAY_NAME_CLAIM);
         }
         return new CurrentUser(new UserId(authentication.getName()), displayName);

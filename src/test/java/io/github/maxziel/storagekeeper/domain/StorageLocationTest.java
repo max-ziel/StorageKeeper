@@ -38,7 +38,7 @@ class StorageLocationTest {
     void equalityIsBasedOnIdOnly() {
         StorageLocation cellar = StorageLocation.create(HOUSEHOLD, new LocationName("Keller"));
         StorageLocation renamed = new StorageLocation(
-                cellar.getStorageLocationId(), HOUSEHOLD, new LocationName("Gewölbekeller"), false);
+            cellar.getStorageLocationId(), HOUSEHOLD, new LocationName("Gewölbekeller"), false);
 
         assertThat(renamed).isEqualTo(cellar).hasSameHashCodeAs(cellar);
     }

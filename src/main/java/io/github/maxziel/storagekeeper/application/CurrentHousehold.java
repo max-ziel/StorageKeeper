@@ -28,7 +28,7 @@ public class CurrentHousehold {
      */
     public HouseholdId require() {
         return householdRepository.findByMember(currentUserProvider.currentUser().userId())
-                .map(Household::getHouseholdId)
-                .orElseThrow(NoHouseholdException::new);
+            .map(Household::getHouseholdId)
+            .orElseThrow(NoHouseholdException::new);
     }
 }

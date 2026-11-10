@@ -11,15 +11,17 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 /**
- * JSON body for {@code POST /api/shopping-list/stock-purchases/{id}/check-off}.
+ * JSON body for {@code POST /api/shopping-list/manual-entries}.
  *
- * @param amount the amount bought, in the item's unit
+ * @param name   what to buy, e.g. "Geburtstagskerzen"
+ * @param amount optional amount to buy; given together with {@code unit} or not at all
+ * @param unit   optional unit of {@code amount}
  */
 public record AddManualShoppingListEntryRequest(
-        @NotBlank @Size(max = ItemName.MAX_LENGTH) String name,
-        @Positive BigDecimal amount,
-        Unit unit
-        ) {
+    @NotBlank @Size(max = ItemName.MAX_LENGTH) String name,
+    @Positive BigDecimal amount,
+    Unit unit
+) {
 
     /**
      * Checked by Bean Validation like a field: either both or neither.

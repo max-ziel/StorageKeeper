@@ -12,27 +12,36 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/storagekeeper
       SPRING_DATASOURCE_USERNAME: storagekeeper
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      SPRING_DATASOURCE_PASSWORD: ${STORAGEKEEPER_DB_PASSWORD:?set STORAGEKEEPER_DB_PASSWORD in .env}
       # Tokens carry the public Keycloak URL as issuer; the keys are fetched inside the network.
       STORAGEKEEPER_ISSUER_URI: ${KEYCLOAK_URL:-http://localhost:8180}/realms/storagekeeper
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/storagekeeper/protocol/openid-connect/certs
       STORAGEKEEPER_LOG_FORMAT: ecs
+      # Swagger UI and /v3/api-docs; set to false in .env to hide them.
+      STORAGEKEEPER_API_DOCS_ENABLED: ${STORAGEKEEPER_API_DOCS_ENABLED:-true}
     ports:
       - "8080:8080"
+    # Every log line carries the user id; keep at most 5 × 10 MB, the oldest file is deleted first.
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
 
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: storagekeeper
-      POSTGRES_USER: storagekeeper
+      # Superuser for administration only; app and Keycloak get their own logins (postgres/init-databases.sh).
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      STORAGEKEEPER_DB_PASSWORD: ${STORAGEKEEPER_DB_PASSWORD:?set STORAGEKEEPER_DB_PASSWORD in .env}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
     volumes:
       - postgres-data:/var/lib/postgresql
-      # Runs only on the first start with an empty volume: creates the database for Keycloak.
+      # Runs only on the first start with an empty volume: creates both databases and their users.
       - ./postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U storagekeeper -d storagekeeper"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d storagekeeper"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -49,14 +58,17 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: storagekeeper
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env}
       # The URL clients use; it becomes the "iss" claim of every token.
       KC_HOSTNAME: ${KEYCLOAK_URL:-http://localhost:8180}
       # Plain HTTP is fine on localhost; behind a reverse proxy with HTTPS set KC_PROXY_HEADERS instead.
       KC_HTTP_ENABLED: "true"
+      # Used by the realm file for the allowed redirect URI of the Swagger UI login.
+      STORAGEKEEPER_URL: ${STORAGEKEEPER_URL:-http://localhost:8080}
     volumes:
-      - ../dev/keycloak:/opt/keycloak/data/import:ro
+      # Production realm: no users (create them in the admin console), no password grant.
+      - ./keycloak:/opt/keycloak/data/import:ro
     ports:
       - "8180:8080"
 

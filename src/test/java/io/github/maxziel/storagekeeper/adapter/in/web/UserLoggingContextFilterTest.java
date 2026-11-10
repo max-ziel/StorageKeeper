@@ -29,7 +29,7 @@ class UserLoggingContextFilterTest {
     @Test
     void putsTheUserIdIntoTheLoggingContextWhileTheRequestRuns() throws Exception {
         SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-                "sub-1234", null, AuthorityUtils.NO_AUTHORITIES));
+            "sub-1234", null, AuthorityUtils.NO_AUTHORITIES));
 
         runFilter();
 
@@ -39,7 +39,7 @@ class UserLoggingContextFilterTest {
     @Test
     void removesTheUserIdAfterTheRequest() throws Exception {
         SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-                "sub-1234", null, AuthorityUtils.NO_AUTHORITIES));
+            "sub-1234", null, AuthorityUtils.NO_AUTHORITIES));
 
         runFilter();
 
@@ -49,7 +49,7 @@ class UserLoggingContextFilterTest {
     @Test
     void removesTheUserIdEvenIfTheRequestFails() {
         SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-                "sub-1234", null, AuthorityUtils.NO_AUTHORITIES));
+            "sub-1234", null, AuthorityUtils.NO_AUTHORITIES));
 
         try {
             filter.doFilter(new MockHttpServletRequest(), new MockHttpServletResponse(), (_, _) -> {
@@ -72,7 +72,7 @@ class UserLoggingContextFilterTest {
     @Test
     void addsNothingForAnonymousRequests() throws Exception {
         SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken(
-                "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
+            "key", "anonymousUser", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
 
         runFilter();
 
@@ -81,6 +81,6 @@ class UserLoggingContextFilterTest {
 
     private void runFilter() throws Exception {
         filter.doFilter(new MockHttpServletRequest(), new MockHttpServletResponse(),
-                (_, _) -> userIdsSeenByChain.add(MDC.get(UserLoggingContextFilter.USER_ID)));
+            (_, _) -> userIdsSeenByChain.add(MDC.get(UserLoggingContextFilter.USER_ID)));
     }
 }

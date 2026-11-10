@@ -9,6 +9,7 @@ import io.github.maxziel.storagekeeper.domain.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -21,6 +22,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
+@Tag("integration")
 @DataJpaTest
 @Import({TestcontainersConfiguration.class, JpaPantryItemRepository.class, JpaStorageLocationRepository.class})
 class JpaPantryItemRepositoryTest {
@@ -35,20 +37,26 @@ class JpaPantryItemRepositoryTest {
     private EntityManager entityManager;
 
     private StoredHousehold household;
-    /** Default location of {@link #household}. */
+    /**
+     * Default location of {@link #household}.
+     */
     private StorageLocationId pantry;
     private PantryItem rice;
+
+    private static List<String> names(ResultPage<PantryItem> page) {
+        return page.content().stream().map(item -> item.getItemName().value()).toList();
+    }
 
     @BeforeEach
     void setUp() {
         household = TestHouseholds.create(entityManager);
         pantry = household.defaultLocation();
         rice = PantryItem.create(
-                household.id(),
-                new ItemName("Reis"),
-                new Quantity(new BigDecimal("1.5"), Unit.KILOGRAM),
-                LocalDate.of(2027, 3, 1),
-                pantry
+            household.id(),
+            new ItemName("Reis"),
+            new Quantity(new BigDecimal("1.5"), Unit.KILOGRAM),
+            LocalDate.of(2027, 3, 1),
+            pantry
         );
     }
 
@@ -69,45 +77,45 @@ class JpaPantryItemRepositoryTest {
     @Test
     void itemCanBeStoredInUserDefinedLocation() {
         StorageLocation cellar = storageLocationRepository.save(
-                StorageLocation.create(household.id(), new LocationName("Keller")));
+            StorageLocation.create(household.id(), new LocationName("Keller")));
         PantryItem wine = PantryItem.create(household.id(), new ItemName("Wein"),
-                new Quantity(BigDecimal.ONE, Unit.PIECE), null, cellar.getStorageLocationId());
+            new Quantity(BigDecimal.ONE, Unit.PIECE), null, cellar.getStorageLocationId());
 
         repository.save(wine);
 
         assertThat(repository.findById(wine.getPantryItemId()).orElseThrow().getStorageLocationId())
-                .isEqualTo(cellar.getStorageLocationId());
+            .isEqualTo(cellar.getStorageLocationId());
     }
 
     @Test
     void itemInUnknownLocationIsRejectedByDatabase() {
         PantryItem lost = PantryItem.create(household.id(), new ItemName("Mehl"),
-                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.newId());
+            new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, StorageLocationId.newId());
 
         assertThatExceptionOfType(PersistenceException.class)
-                .isThrownBy(() -> {
-                    repository.save(lost);
-                    entityManager.flush();
-                });
+            .isThrownBy(() -> {
+                repository.save(lost);
+                entityManager.flush();
+            });
     }
 
     @Test
     void itemInLocationOfAnotherHouseholdIsRejectedByDatabase() {
         StoredHousehold otherHousehold = TestHouseholds.create(entityManager);
         PantryItem misplaced = PantryItem.create(household.id(), new ItemName("Mehl"),
-                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, otherHousehold.defaultLocation());
+            new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, otherHousehold.defaultLocation());
 
         assertThatExceptionOfType(PersistenceException.class)
-                .isThrownBy(() -> {
-                    repository.save(misplaced);
-                    entityManager.flush();
-                });
+            .isThrownBy(() -> {
+                repository.save(misplaced);
+                entityManager.flush();
+            });
     }
 
     @Test
     void itemWithoutExpiryDateCanBeStored() {
         PantryItem salt = PantryItem.create(household.id(), new ItemName("Salz"),
-                new Quantity(BigDecimal.ONE, Unit.PACKAGE), null, pantry);
+            new Quantity(BigDecimal.ONE, Unit.PACKAGE), null, pantry);
         repository.save(salt);
 
         assertThat(repository.findById(salt.getPantryItemId()).orElseThrow().getExpiryDate()).isEmpty();
@@ -120,9 +128,9 @@ class JpaPantryItemRepositoryTest {
         repository.save(rice);
 
         assertThat(repository.findById(rice.getPantryItemId()).orElseThrow().getQuantity().amount())
-                .isEqualByComparingTo("0.5");
+            .isEqualByComparingTo("0.5");
         assertThat(repository.search(household.id(), PantryItemFilter.none(), new PageQuery(0, 10)).totalElements())
-                .isEqualTo(1);
+            .isEqualTo(1);
     }
 
     @Test
@@ -142,14 +150,14 @@ class JpaPantryItemRepositoryTest {
     @Test
     void findWithExpiryDateUpToReturnsItemsUpToTheDateSortedByExpiry() {
         PantryItem milk = PantryItem.create(household.id(), new ItemName("Milch"),
-                new Quantity(BigDecimal.ONE, Unit.LITER), LocalDate.of(2027, 2, 24), pantry);
+            new Quantity(BigDecimal.ONE, Unit.LITER), LocalDate.of(2027, 2, 24), pantry);
         PantryItem flour = PantryItem.create(household.id(), new ItemName("Mehl"),
-                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), LocalDate.of(2027, 6, 1), pantry);
+            new Quantity(BigDecimal.ONE, Unit.KILOGRAM), LocalDate.of(2027, 6, 1), pantry);
         PantryItem salt = PantryItem.create(household.id(), new ItemName("Salz"),
-                new Quantity(BigDecimal.ONE, Unit.PACKAGE), null, pantry);
+            new Quantity(BigDecimal.ONE, Unit.PACKAGE), null, pantry);
         StoredHousehold otherHousehold = TestHouseholds.create(entityManager);
         PantryItem foreignMilk = PantryItem.create(otherHousehold.id(), new ItemName("Milch"),
-                new Quantity(BigDecimal.ONE, Unit.LITER), LocalDate.of(2027, 2, 20), otherHousehold.defaultLocation());
+            new Quantity(BigDecimal.ONE, Unit.LITER), LocalDate.of(2027, 2, 20), otherHousehold.defaultLocation());
         repository.save(rice);
         repository.save(milk);
         repository.save(flour);
@@ -157,7 +165,7 @@ class JpaPantryItemRepositoryTest {
         repository.save(foreignMilk);
 
         assertThat(repository.findWithExpiryDateUpTo(household.id(), LocalDate.of(2027, 3, 1)))
-                .containsExactly(milk, rice);
+            .containsExactly(milk, rice);
     }
 
     @Test
@@ -174,12 +182,12 @@ class JpaPantryItemRepositoryTest {
     @Test
     void searchFiltersByLocationAndMinimumAndSortsByName() {
         StorageLocation cellar = storageLocationRepository.save(
-                StorageLocation.create(household.id(), new LocationName("Keller")));
+            StorageLocation.create(household.id(), new LocationName("Keller")));
         PantryItem wine = PantryItem.create(household.id(), new ItemName("Wein"),
-                new Quantity(BigDecimal.ONE, Unit.PIECE), null, cellar.getStorageLocationId());
+            new Quantity(BigDecimal.ONE, Unit.PIECE), null, cellar.getStorageLocationId());
         wine.changeMinimumAmount(new BigDecimal("6"));
         PantryItem juice = PantryItem.create(household.id(), new ItemName("Apfelsaft"),
-                new Quantity(BigDecimal.TEN, Unit.LITER), null, cellar.getStorageLocationId());
+            new Quantity(BigDecimal.TEN, Unit.LITER), null, cellar.getStorageLocationId());
         juice.changeMinimumAmount(new BigDecimal("2"));
         rice.changeMinimumAmount(new BigDecimal("5"));
         repository.save(wine);
@@ -187,15 +195,15 @@ class JpaPantryItemRepositoryTest {
         repository.save(rice);
 
         assertThat(names(repository.search(household.id(), PantryItemFilter.none(), new PageQuery(0, 10))))
-                .containsExactly("Apfelsaft", "Reis", "Wein");
+            .containsExactly("Apfelsaft", "Reis", "Wein");
         assertThat(names(repository.search(household.id(),
-                new PantryItemFilter(cellar.getStorageLocationId(), false), new PageQuery(0, 10))))
-                .containsExactly("Apfelsaft", "Wein");
+            new PantryItemFilter(cellar.getStorageLocationId(), false), new PageQuery(0, 10))))
+            .containsExactly("Apfelsaft", "Wein");
         assertThat(names(repository.search(household.id(), new PantryItemFilter(null, true), new PageQuery(0, 10))))
-                .containsExactly("Reis", "Wein");
+            .containsExactly("Reis", "Wein");
         assertThat(names(repository.search(household.id(),
-                new PantryItemFilter(cellar.getStorageLocationId(), true), new PageQuery(0, 10))))
-                .containsExactly("Wein");
+            new PantryItemFilter(cellar.getStorageLocationId(), true), new PageQuery(0, 10))))
+            .containsExactly("Wein");
     }
 
     @Test
@@ -203,7 +211,7 @@ class JpaPantryItemRepositoryTest {
         StoredHousehold otherHousehold = TestHouseholds.create(entityManager);
         repository.save(rice);
         repository.save(PantryItem.create(otherHousehold.id(), new ItemName("Fremder Reis"),
-                new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, otherHousehold.defaultLocation()));
+            new Quantity(BigDecimal.ONE, Unit.KILOGRAM), null, otherHousehold.defaultLocation()));
 
         ResultPage<PantryItem> page = repository.search(household.id(), PantryItemFilter.none(), new PageQuery(0, 10));
 
@@ -215,7 +223,7 @@ class JpaPantryItemRepositoryTest {
     void searchReturnsRequestedPage() {
         for (String name : List.of("A", "B", "C", "D", "E")) {
             repository.save(PantryItem.create(household.id(), new ItemName(name),
-                    new Quantity(BigDecimal.ONE, Unit.PIECE), null, pantry));
+                new Quantity(BigDecimal.ONE, Unit.PIECE), null, pantry));
         }
 
         ResultPage<PantryItem> secondPage = repository.search(household.id(), PantryItemFilter.none(), new PageQuery(1, 2));
@@ -223,9 +231,5 @@ class JpaPantryItemRepositoryTest {
         assertThat(names(secondPage)).containsExactly("C", "D");
         assertThat(secondPage.totalElements()).isEqualTo(5);
         assertThat(secondPage.totalPages()).isEqualTo(3);
-    }
-
-    private static List<String> names(ResultPage<PantryItem> page) {
-        return page.content().stream().map(item -> item.getItemName().value()).toList();
     }
 }

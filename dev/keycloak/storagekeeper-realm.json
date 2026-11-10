@@ -5,6 +5,35 @@
   "accessTokenLifespan": 3600,
   "clients": [
     {
+      "clientId": "storagekeeper-web",
+      "name": "StorageKeeper (Browser)",
+      "description": "Anmeldung im Browser per Authorization Code mit PKCE, z. B. über die Swagger UI. Ohne Passwort-Grant.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:8080/swagger-ui/oauth2-redirect.html"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience storagekeeper-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "storagekeeper-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
       "clientId": "storagekeeper-cli",
       "name": "StorageKeeper CLI / Swagger UI",
       "description": "Nur für lokale Entwicklung: holt Tokens per Benutzername und Passwort.",

@@ -11,7 +11,7 @@ public interface AddManualShoppingListEntryUseCase {
 
     /**
      * @param quantity optional, {@code null} if no amount was given
-     * @throws IllegalArgumentException if the quantity is zero
+     * @throws io.github.maxziel.storagekeeper.domain.DomainValidationException if the quantity is zero
      */
     ManualShoppingListEntry add(ItemName name, Quantity quantity);
 }

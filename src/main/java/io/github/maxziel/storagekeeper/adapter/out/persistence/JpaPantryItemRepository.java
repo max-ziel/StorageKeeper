@@ -32,7 +32,6 @@ class JpaPantryItemRepository implements PantryItemRepository {
         this.jpaRepository = jpaRepository;
     }
 
-
     @Override
     public PantryItem save(PantryItem pantryItem) {
         jpaRepository.save(PantryItemJpaEntity.fromDomain(pantryItem));
@@ -42,7 +41,7 @@ class JpaPantryItemRepository implements PantryItemRepository {
     @Override
     public Optional<PantryItem> findById(PantryItemId pantryItemId) {
         return jpaRepository.findById(pantryItemId.value())
-                .map(PantryItemJpaEntity::toDomain);
+            .map(PantryItemJpaEntity::toDomain);
     }
 
     @Override
@@ -53,15 +52,15 @@ class JpaPantryItemRepository implements PantryItemRepository {
         }
 
         jpaRepository.deleteById(pantryItemId.value());
-        return  true;
+        return true;
     }
 
     @Override
     public List<PantryItem> findWithExpiryDateUpTo(HouseholdId householdId, LocalDate latest) {
         return jpaRepository.findByHouseholdIdAndExpiryDateLessThanEqualOrderByExpiryDateAsc(
-                        householdId.value(), latest).stream()
-                .map(PantryItemJpaEntity::toDomain)
-                .toList();
+                householdId.value(), latest).stream()
+            .map(PantryItemJpaEntity::toDomain)
+            .toList();
     }
 
     @Override
@@ -70,7 +69,7 @@ class JpaPantryItemRepository implements PantryItemRepository {
 
         if (filter.storageLocationId() != null) {
             specification = specification.and(
-                    PantryItemSpecifications.inStorageLocation(filter.storageLocationId().value())
+                PantryItemSpecifications.inStorageLocation(filter.storageLocationId().value())
             );
         }
 
@@ -79,22 +78,22 @@ class JpaPantryItemRepository implements PantryItemRepository {
         }
 
         // Sorting by id as well keeps the order stable when names are equal, so no item appears on two pages.
-        PageRequest pageRequest = PageRequest.of(page.page(), page.size(), Sort.by("name","id"));
+        PageRequest pageRequest = PageRequest.of(page.page(), page.size(), Sort.by("name", "id"));
 
         Page<PantryItemJpaEntity> result = jpaRepository.findAll(specification, pageRequest);
 
         return new ResultPage<>(
-                result.getContent().stream().map(PantryItemJpaEntity::toDomain).toList(),
-                page.page(),
-                page.size(),
-                result.getTotalElements()
+            result.getContent().stream().map(PantryItemJpaEntity::toDomain).toList(),
+            page.page(),
+            page.size(),
+            result.getTotalElements()
         );
     }
 
     @Override
     public List<PantryItem> findAllById(Collection<PantryItemId> pantryItemIds) {
         return jpaRepository.findAllById(pantryItemIds.stream().map(PantryItemId::value).toList()).stream()
-                .map(PantryItemJpaEntity::toDomain)
-                .toList();
+            .map(PantryItemJpaEntity::toDomain)
+            .toList();
     }
 }

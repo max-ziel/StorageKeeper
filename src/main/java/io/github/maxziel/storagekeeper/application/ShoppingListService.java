@@ -1,25 +1,10 @@
 package io.github.maxziel.storagekeeper.application;
 
-import io.github.maxziel.storagekeeper.application.port.in.AddManualShoppingListEntryUseCase;
-import io.github.maxziel.storagekeeper.application.port.in.CheckOffStockPurchaseUseCase;
-import io.github.maxziel.storagekeeper.application.port.in.ListShoppingListUseCase;
-import io.github.maxziel.storagekeeper.application.port.in.RemoveManualShoppingListEntryUseCase;
-import io.github.maxziel.storagekeeper.application.port.in.RestockPantryItemUseCase;
-import io.github.maxziel.storagekeeper.application.port.in.ShoppingList;
-import io.github.maxziel.storagekeeper.application.port.in.ShoppingListItem;
-import io.github.maxziel.storagekeeper.application.port.in.UpdateShoppingListUseCase;
+import io.github.maxziel.storagekeeper.application.port.in.*;
 import io.github.maxziel.storagekeeper.application.port.out.ManualShoppingListRepository;
 import io.github.maxziel.storagekeeper.application.port.out.PantryItemRepository;
 import io.github.maxziel.storagekeeper.application.port.out.ShoppingListRepository;
-import io.github.maxziel.storagekeeper.domain.HouseholdId;
-import io.github.maxziel.storagekeeper.domain.ItemName;
-import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntry;
-import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntryId;
-import io.github.maxziel.storagekeeper.domain.PantryItem;
-import io.github.maxziel.storagekeeper.domain.PantryItemId;
-import io.github.maxziel.storagekeeper.domain.Quantity;
-import io.github.maxziel.storagekeeper.domain.ShoppingListEntry;
-import io.github.maxziel.storagekeeper.domain.ShoppingListEntryId;
+import io.github.maxziel.storagekeeper.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +23,7 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ShoppingListService implements ListShoppingListUseCase, UpdateShoppingListUseCase,
-        CheckOffStockPurchaseUseCase, AddManualShoppingListEntryUseCase, RemoveManualShoppingListEntryUseCase {
+    CheckOffStockPurchaseUseCase, AddManualShoppingListEntryUseCase, RemoveManualShoppingListEntryUseCase {
 
     private final ShoppingListRepository shoppingListRepository;
     private final ManualShoppingListRepository manualShoppingListRepository;
@@ -54,9 +39,9 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
                                Clock clock,
                                CurrentHousehold currentHousehold) {
         this.shoppingListRepository =
-                Objects.requireNonNull(shoppingListRepository, "shoppingListRepository must not be null");
+            Objects.requireNonNull(shoppingListRepository, "shoppingListRepository must not be null");
         this.manualShoppingListRepository =
-                Objects.requireNonNull(manualShoppingListRepository, "manualShoppingListRepository must not be null");
+            Objects.requireNonNull(manualShoppingListRepository, "manualShoppingListRepository must not be null");
         this.pantryItemRepository = Objects.requireNonNull(pantryItemRepository, "pantryItemRepository must not be null");
         this.restockPantryItem = Objects.requireNonNull(restockPantryItem, "restockPantryItem must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
@@ -87,10 +72,10 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
         HouseholdId household = currentHousehold.require();
         // The entry belongs to the household of its item.
         ShoppingListEntry entry = shoppingListRepository.findById(shoppingListEntryId)
-                .filter(found -> pantryItemRepository.findById(found.getPantryItemId())
-                        .map(item -> item.belongsTo(household))
-                        .orElse(false))
-                .orElseThrow(() -> new ShoppingListEntryNotFoundException(shoppingListEntryId));
+            .filter(found -> pantryItemRepository.findById(found.getPantryItemId())
+                .map(item -> item.belongsTo(household))
+                .orElse(false))
+            .orElseThrow(() -> new ShoppingListEntryNotFoundException(shoppingListEntryId));
         return restockPantryItem.restock(entry.getPantryItemId(), purchasedAmount);
     }
 
@@ -98,7 +83,7 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
     @Transactional
     public ManualShoppingListEntry add(ItemName name, Quantity quantity) {
         return manualShoppingListRepository.save(
-                ManualShoppingListEntry.create(currentHousehold.require(), name, quantity, clock.instant()));
+            ManualShoppingListEntry.create(currentHousehold.require(), name, quantity, clock.instant()));
     }
 
     @Override
@@ -106,8 +91,8 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
     public void remove(ManualShoppingListEntryId manualShoppingListEntryId) {
         HouseholdId household = currentHousehold.require();
         manualShoppingListRepository.findById(manualShoppingListEntryId)
-                .filter(entry -> entry.belongsTo(household))
-                .orElseThrow(() -> new ShoppingListEntryNotFoundException(manualShoppingListEntryId));
+            .filter(entry -> entry.belongsTo(household))
+            .orElseThrow(() -> new ShoppingListEntryNotFoundException(manualShoppingListEntryId));
         manualShoppingListRepository.deleteById(manualShoppingListEntryId);
     }
 
@@ -122,12 +107,12 @@ public class ShoppingListService implements ListShoppingListUseCase, UpdateShopp
         List<ShoppingListEntry> entries = shoppingListRepository.findAll(household);
         // One query for all items instead of one per entry.
         Map<PantryItemId, PantryItem> items = pantryItemRepository
-                .findAllById(entries.stream().map(ShoppingListEntry::getPantryItemId).toList())
-                .stream()
-                .collect(Collectors.toMap(PantryItem::getPantryItemId, Function.identity()));
+            .findAllById(entries.stream().map(ShoppingListEntry::getPantryItemId).toList())
+            .stream()
+            .collect(Collectors.toMap(PantryItem::getPantryItemId, Function.identity()));
         return entries.stream()
-                .filter(entry -> items.containsKey(entry.getPantryItemId()))
-                .map(entry -> new ShoppingListItem(entry, items.get(entry.getPantryItemId())))
-                .toList();
+            .filter(entry -> items.containsKey(entry.getPantryItemId()))
+            .map(entry -> new ShoppingListItem(entry, items.get(entry.getPantryItemId())))
+            .toList();
     }
 }

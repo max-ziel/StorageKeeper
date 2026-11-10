@@ -4,9 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.*;
 
 class HouseholdTest {
 
@@ -38,13 +36,13 @@ class HouseholdTest {
         Household household = Household.found(new HouseholdName("WG"), ALICE, CODE);
 
         assertThatIllegalStateException()
-                .isThrownBy(() -> household.join(new HouseholdMember(ALICE.userId(), "alice again")));
+            .isThrownBy(() -> household.join(new HouseholdMember(ALICE.userId(), "alice again")));
     }
 
     @Test
     void restoringWithTheSameUserTwiceIsRejected() {
         assertThatIllegalStateException().isThrownBy(() ->
-                new Household(HouseholdId.newId(), new HouseholdName("WG"), CODE, List.of(ALICE, ALICE)));
+            new Household(HouseholdId.newId(), new HouseholdName("WG"), CODE, List.of(ALICE, ALICE)));
     }
 
     @Test

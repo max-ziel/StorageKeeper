@@ -13,9 +13,9 @@ public record StorageLocationResponse(UUID id, String name, boolean defaultLocat
 
     static StorageLocationResponse from(StorageLocation location) {
         return new StorageLocationResponse(
-                location.getStorageLocationId().value(),
-                location.getLocationName().value(),
-                location.isDefault()
+            location.getStorageLocationId().value(),
+            location.getLocationName().value(),
+            location.isDefault()
         );
     }
 }

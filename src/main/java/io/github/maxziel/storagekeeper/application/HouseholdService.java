@@ -7,11 +7,7 @@ import io.github.maxziel.storagekeeper.application.port.out.CurrentUser;
 import io.github.maxziel.storagekeeper.application.port.out.CurrentUserProvider;
 import io.github.maxziel.storagekeeper.application.port.out.HouseholdRepository;
 import io.github.maxziel.storagekeeper.application.port.out.StorageLocationRepository;
-import io.github.maxziel.storagekeeper.domain.Household;
-import io.github.maxziel.storagekeeper.domain.HouseholdMember;
-import io.github.maxziel.storagekeeper.domain.HouseholdName;
-import io.github.maxziel.storagekeeper.domain.InviteCode;
-import io.github.maxziel.storagekeeper.domain.StorageLocation;
+import io.github.maxziel.storagekeeper.domain.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -19,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 
-/** Implements the household use cases. */
+/**
+ * Implements the household use cases.
+ */
 @Service
 public class HouseholdService implements CreateHouseholdUseCase, ShowHouseholdUseCase, JoinHouseholdUseCase {
 
@@ -33,8 +31,12 @@ public class HouseholdService implements CreateHouseholdUseCase, ShowHouseholdUs
                             CurrentUserProvider currentUserProvider) {
         this.householdRepository = Objects.requireNonNull(householdRepository, "householdRepository must not be null");
         this.storageLocationRepository =
-                Objects.requireNonNull(storageLocationRepository, "storageLocationRepository must not be null");
+            Objects.requireNonNull(storageLocationRepository, "storageLocationRepository must not be null");
         this.currentUserProvider = Objects.requireNonNull(currentUserProvider, "currentUserProvider must not be null");
+    }
+
+    private static HouseholdMember asMember(CurrentUser user) {
+        return new HouseholdMember(user.userId(), user.displayName());
     }
 
     @Override
@@ -54,7 +56,7 @@ public class HouseholdService implements CreateHouseholdUseCase, ShowHouseholdUs
     @Transactional(readOnly = true)
     public Household getCurrent() {
         return householdRepository.findByMember(currentUserProvider.currentUser().userId())
-                .orElseThrow(NoHouseholdException::new);
+            .orElseThrow(NoHouseholdException::new);
     }
 
     @Override
@@ -64,12 +66,12 @@ public class HouseholdService implements CreateHouseholdUseCase, ShowHouseholdUs
         requireNoHousehold(user);
 
         Household household = householdRepository.findByInviteCode(inviteCode)
-                .orElseThrow(UnknownInviteCodeException::new);
+            .orElseThrow(UnknownInviteCodeException::new);
         household.join(asMember(user));
 
         Household saved = householdRepository.save(household);
         log.info("User joined household {}, which now has {} members",
-                saved.getHouseholdId().value(), saved.getMembers().size());
+            saved.getHouseholdId().value(), saved.getMembers().size());
         return saved;
     }
 
@@ -79,16 +81,14 @@ public class HouseholdService implements CreateHouseholdUseCase, ShowHouseholdUs
         }
     }
 
-    /** Codes are unique; a collision is very unlikely, but costs only one more lookup. */
+    /**
+     * Codes are unique; a collision is very unlikely, but costs only one more lookup.
+     */
     private InviteCode newInviteCode() {
         InviteCode code;
         do {
             code = InviteCode.generate();
         } while (householdRepository.findByInviteCode(code).isPresent());
         return code;
-    }
-
-    private static HouseholdMember asMember(CurrentUser user) {
-        return new HouseholdMember(user.userId(), user.displayName());
     }
 }

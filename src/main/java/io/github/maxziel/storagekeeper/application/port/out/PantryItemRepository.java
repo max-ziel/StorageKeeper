@@ -14,19 +14,23 @@ import java.util.Optional;
 
 /**
  * Storage for pantry items, as needed by the application. Implemented by a
- * driven adapter (in M1 in memory, from M2 on with JPA).
+ * driven adapter, today {@code JpaPantryItemRepository} with PostgreSQL.
  *
  * <p>Lookups by id return items of any household; the caller checks {@link PantryItem#belongsTo}.
  * Queries that return many items take the household and only return its items.
  */
 public interface PantryItemRepository {
 
-    /** Inserts or replaces the item and returns it */
+    /**
+     * Inserts or replaces the item and returns it
+     */
     PantryItem save(PantryItem pantryItem);
 
     Optional<PantryItem> findById(PantryItemId pantryItemId);
 
-    /** Loads all items with the given ids; unknown ids are skipped. */
+    /**
+     * Loads all items with the given ids; unknown ids are skipped.
+     */
     List<PantryItem> findAllById(Collection<PantryItemId> pantryItemIds);
 
     /**

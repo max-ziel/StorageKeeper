@@ -1,7 +1,11 @@
 name: CI
 
 on:
+  # Branches are built through their pull request; a push only triggers a build on main.
   push:
+    branches: [ main ]
+    # A release tag (v0.7.0) builds again and publishes the image under its version.
+    tags: [ 'v*' ]
   pull_request:
 
 jobs:
@@ -24,8 +28,8 @@ jobs:
     - name: Validate Gradle Wrapper
       uses: gradle/actions/wrapper-validation@v4
 
-    - name: Run Tests
-      run: ./gradlew test jacocoTestReport
+    - name: Build and Test
+      run: ./gradlew build jacocoTestReport
 
     - name: Create coverage-data directory and copy contents
       run: |
@@ -39,9 +43,10 @@ jobs:
         path: .qodana/code-coverage
 
   image:
-    # Only for main: every merged change becomes an image in the GitHub Container Registry.
+    # Every merged change on main becomes an image in the GitHub Container Registry ("latest" and the commit);
+    # a release tag v<version> publishes the image under its version.
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -57,8 +62,24 @@ jobs:
           java-version: 25
           cache: 'gradle'
 
+      - name: Choose image tags
+        id: tags
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            project_version=$(./gradlew -q properties --property version | sed -n 's/^version: //p')
+            if [[ "$version" != "$project_version" ]]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match version $project_version in build.gradle.kts"
+              exit 1
+            fi
+            echo "tags=$version" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=latest,${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and publish image
         env:
           REGISTRY_USERNAME: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew bootBuildImage --publishImage -PimageTag=${GITHUB_SHA::7}
+          IMAGE_TAGS: ${{ steps.tags.outputs.tags }}
+        run: ./gradlew bootBuildImage --publishImage -PimageTags="$IMAGE_TAGS"

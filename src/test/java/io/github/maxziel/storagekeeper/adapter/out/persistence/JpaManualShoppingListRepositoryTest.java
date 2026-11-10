@@ -2,13 +2,10 @@ package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
 import io.github.maxziel.storagekeeper.TestcontainersConfiguration;
 import io.github.maxziel.storagekeeper.adapter.out.persistence.TestHouseholds.StoredHousehold;
-import io.github.maxziel.storagekeeper.domain.ItemName;
-import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntry;
-import io.github.maxziel.storagekeeper.domain.ManualShoppingListEntryId;
-import io.github.maxziel.storagekeeper.domain.Quantity;
-import io.github.maxziel.storagekeeper.domain.Unit;
+import io.github.maxziel.storagekeeper.domain.*;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -19,6 +16,7 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@Tag("integration")
 @DataJpaTest
 @Import({TestcontainersConfiguration.class, JpaManualShoppingListRepository.class})
 class JpaManualShoppingListRepositoryTest {
@@ -39,10 +37,10 @@ class JpaManualShoppingListRepositoryTest {
     @Test
     void savedEntriesAreListedOldestFirstWithOrWithoutQuantity() {
         ManualShoppingListEntry later = repository.save(ManualShoppingListEntry.create(household.id(),
-                new ItemName("Kerzen"), new Quantity(new BigDecimal("12"), Unit.PIECE),
-                Instant.parse("2027-02-26T12:00:00Z")));
+            new ItemName("Kerzen"), new Quantity(new BigDecimal("12"), Unit.PIECE),
+            Instant.parse("2027-02-26T12:00:00Z")));
         ManualShoppingListEntry earlier = repository.save(ManualShoppingListEntry.create(household.id(),
-                new ItemName("Ballons"), null, Instant.parse("2027-02-26T08:00:00Z")));
+            new ItemName("Ballons"), null, Instant.parse("2027-02-26T08:00:00Z")));
         entityManager.flush();
         entityManager.clear();
 
@@ -60,7 +58,7 @@ class JpaManualShoppingListRepositoryTest {
     void findAllOnlyReturnsEntriesOfTheHousehold() {
         StoredHousehold otherHousehold = TestHouseholds.create(entityManager);
         ManualShoppingListEntry own = repository.save(
-                ManualShoppingListEntry.create(household.id(), new ItemName("Kerzen"), null, Instant.now()));
+            ManualShoppingListEntry.create(household.id(), new ItemName("Kerzen"), null, Instant.now()));
         repository.save(ManualShoppingListEntry.create(otherHousehold.id(), new ItemName("Ballons"), null, Instant.now()));
 
         assertThat(repository.findAll(household.id())).containsExactly(own);
@@ -69,7 +67,7 @@ class JpaManualShoppingListRepositoryTest {
     @Test
     void findByIdAndDeleteById() {
         ManualShoppingListEntry entry = repository.save(
-                ManualShoppingListEntry.create(household.id(), new ItemName("Kerzen"), null, Instant.now()));
+            ManualShoppingListEntry.create(household.id(), new ItemName("Kerzen"), null, Instant.now()));
 
         assertThat(repository.findById(entry.getManualShoppingListEntryId())).contains(entry);
         assertThat(repository.deleteById(entry.getManualShoppingListEntryId())).isTrue();

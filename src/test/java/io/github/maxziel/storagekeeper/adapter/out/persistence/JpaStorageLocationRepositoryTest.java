@@ -8,6 +8,7 @@ import io.github.maxziel.storagekeeper.domain.StorageLocationId;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -18,6 +19,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
+@Tag("integration")
 @DataJpaTest
 @Import({TestcontainersConfiguration.class, JpaStorageLocationRepository.class})
 class JpaStorageLocationRepositoryTest {
@@ -53,8 +55,8 @@ class JpaStorageLocationRepositoryTest {
         repository.save(StorageLocation.create(otherHousehold.id(), new LocationName("Garage")));
 
         List<String> names = repository.findAll(household.id()).stream()
-                .map(location -> location.getLocationName().value())
-                .toList();
+            .map(location -> location.getLocationName().value())
+            .toList();
 
         assertThat(names).containsExactly("Keller", "Kühlschrank", "Vorrat");
     }

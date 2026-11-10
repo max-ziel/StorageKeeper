@@ -1,17 +1,24 @@
 # StorageKeeper
+[![CI](https://github.com/max-ziel/StorageKeeper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/max-ziel/StorageKeeper/actions/workflows/ci.yml)
 [![Qodana](https://github.com/max-ziel/StorageKeeper/actions/workflows/qodana_code_quality.yml/badge.svg)](https://github.com/max-ziel/StorageKeeper/actions/workflows/qodana_code_quality.yml)
 
 Pantry-App – Java 25, Spring Boot 4, Ports & Adapters, Gradle (Kotlin DSL).
 
 Planung und Milestones: [docs/ROADMAP.md](docs/ROADMAP.md)  
-Domain-Modell und Request-Ablauf: [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md)
+Domain-Modell und Request-Ablauf: [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md)  
+Änderungen je Version: [CHANGELOG.md](CHANGELOG.md)
 
 ## Build & Start
 
-Voraussetzungen: JDK 25 und ein laufendes Docker (für PostgreSQL).
+Voraussetzungen: JDK 25 und ein laufendes Docker (für PostgreSQL und Keycloak bei `bootRun` und für die Tests,
+die per Testcontainers gegen PostgreSQL laufen).
+
+Gradle lädt ein fehlendes JDK 25 automatisch herunter (Foojay-Toolchain-Resolver). Ist `api.foojay.io` nicht
+erreichbar, z. B. hinter einem Firmen-Proxy, ein lokal installiertes JDK angeben:
+`./gradlew build -Dorg.gradle.java.installations.paths=/pfad/zum/jdk-25`.
 
 ```bash
-./gradlew build      # kompiliert, testet (inkl. Architekturregeln und Tests gegen PostgreSQL per Testcontainers)
+./gradlew build      # kompiliert, testet (inkl. Architekturregeln und Tests gegen PostgreSQL per Testcontainers), prüft die Abdeckung
 ./gradlew bootRun    # startet PostgreSQL und Keycloak per Docker Compose (compose.yaml) und die App auf http://localhost:8080
 curl localhost:8081/actuator/health
 ```
@@ -34,6 +41,10 @@ TOKEN=$(curl -s localhost:8180/realms/storagekeeper/protocol/openid-connect/toke
   -d grant_type=password -d client_id=storagekeeper-cli -d username=alice -d password=alice | jq -r .access_token)
 ```
 
+Der Client `storagekeeper-cli` mit Passwort-Grant existiert nur in diesem Entwicklungs-Realm. Im Browser meldet man
+sich über die Swagger UI an (Client `storagekeeper-web`, siehe „API-Dokumentation“); das funktioniert lokal und im
+Deployment gleich.
+
 Die App akzeptiert nur Tokens, die vom eingestellten Issuer stammen und für diese API ausgestellt sind
 (`aud` enthält `storagekeeper-api`). Einen anderen Issuer setzt man mit der Umgebungsvariable `STORAGEKEEPER_ISSUER_URI`.
 
@@ -52,8 +63,13 @@ mit dessen Code beitritt; der Code steht nur in der Datenbank (`SELECT invite_co
 
 ## API-Dokumentation
 
-- Swagger UI: http://localhost:8080/swagger-ui.html – über „Authorize“ das Token (ohne `Bearer `) eintragen.
+- Swagger UI: http://localhost:8080/swagger-ui.html – „Authorize“ bietet zwei Wege:
+  - **keycloak:** Client-ID `storagekeeper-web` ist vorausgefüllt; „Authorize“ öffnet die Keycloak-Anmeldung im
+    Browser (Authorization Code mit PKCE, kein Client-Secret), danach sendet die Swagger UI das Token selbst mit.
+  - **bearerAuth:** ein vorhandenes Token (ohne `Bearer `) einfügen, z. B. aus dem `curl` oben.
 - OpenAPI-Dokument (JSON): http://localhost:8080/v3/api-docs
+
+Mit `STORAGEKEEPER_API_DOCS_ENABLED=false` sind beide abgeschaltet (`404`).
 
 Die Dokumentation wird von springdoc aus den Controllern erzeugt und ist daher immer auf dem Stand des Codes.
 
@@ -63,7 +79,7 @@ Die Dokumentation wird von springdoc aus den Controllern erzeugt und ist daher i
 
 | Methode | Pfad                  | Body             | Antwort                                                      |
 |---------|-----------------------|------------------|--------------------------------------------------------------|
-| `POST`  | `/api/household`      | `{"name"}`       | `201` + Haushalt; `409` wenn man schon in einem Haushalt ist |
+| `POST`  | `/api/household`      | `{"name"}`       | `201` + `Location`-Header + Haushalt; `409` wenn man schon in einem Haushalt ist |
 | `GET`   | `/api/household`      | –                | `200` + eigener Haushalt; `403` ohne Haushalt                |
 | `POST`  | `/api/household/join` | `{"inviteCode"}` | `200` + Haushalt; `400` bei unbekanntem Code, `409` wie oben |
 
@@ -76,7 +92,7 @@ Reihenfolge, in der sie beigetreten sind. Beim Code ist Groß-/Kleinschreibung e
 |----------|-----------------------------------|-------------------------------------------------------------------------------------|------------------------------------------------|
 | `POST`   | `/api/pantry-items`               | `{"name", "amount", "unit", "expiryDate"?, "storageLocationId"?, "minimumAmount"?}` | `201` + `Location`-Header + Artikel            |
 | `GET`    | `/api/pantry-items`               | `?storageLocationId=&belowMinimum=&page=&size=` (alle optional)                     | `200` + Seite (`content`, `totalElements`, …)  |
-| `GET`    | `/api/pantry-items/expiring`      | `?days=` (optional, 0–365, Standard 7)                                              | `200` + Liste mit `daysUntilExpiry`, `expired` |
+| `GET`    | `/api/pantry-items/expiring`      | `?days=` (optional, 0–365, Standard 7)                                              | `200` + Artikel mit `daysUntilExpiry`, `expired` |
 | `PATCH`  | `/api/pantry-items/{id}/quantity` | `{"amount"}`                                                                        | `200` + Artikel                                |
 | `PATCH`  | `/api/pantry-items/{id}/minimum`  | `{"amount"}` (`0` = kein Mindestbestand)                                            | `200` + Artikel                                |
 | `DELETE` | `/api/pantry-items/{id}`          | –                                                                                   | `204`                                          |
@@ -86,7 +102,8 @@ Reihenfolge, in der sie beigetreten sind. Beim Code ist Groß-/Kleinschreibung e
   keinen Mindestbestand. Ein angegebener Lagerort muss zum eigenen Haushalt gehören.
 - Die Liste ist nach Name sortiert; Standard ist Seite `0` mit `20` Einträgen, höchstens `100` pro Seite.
   `belowMinimum=true` zeigt nur Artikel, deren Menge unter dem Mindestbestand liegt.
-- `/expiring` liefert alles, was in den nächsten `days` Tagen abläuft oder schon abgelaufen ist (`daysUntilExpiry` negativ).
+- `/expiring` liefert alles, was in den nächsten `days` Tagen abläuft oder schon abgelaufen ist (`daysUntilExpiry` negativ),
+  mit denselben Feldern wie ein Artikel (inkl. `minimumAmount` und `belowMinimum`).
 
 ### Einkaufsliste – `/api/shopping-list`
 
@@ -94,7 +111,7 @@ Reihenfolge, in der sie beigetreten sind. Beim Code ist Groß-/Kleinschreibung e
 |----------|-----------------------------------------------------|--------------------------------|-------------------------------------------------------------|
 | `GET`    | `/api/shopping-list`                                | –                              | `200` + `{"stockPurchases": [...], "manualEntries": [...]}` |
 | `POST`   | `/api/shopping-list/stock-purchases/{id}/check-off` | `{"amount"}` (> 0)             | `200` + Artikel mit neuem Bestand                           |
-| `POST`   | `/api/shopping-list/manual-entries`                 | `{"name", "amount"?, "unit"?}` | `201` + Eintrag                                             |
+| `POST`   | `/api/shopping-list/manual-entries`                 | `{"name", "amount"?, "unit"?}` | `201` + `Location`-Header + Eintrag                         |
 | `DELETE` | `/api/shopping-list/manual-entries/{id}`            | –                              | `204`                                                       |
 
 Die Liste hat zwei Abschnitte, beide älteste zuerst:
@@ -110,14 +127,19 @@ Die Liste hat zwei Abschnitte, beide älteste zuerst:
 
 | Methode | Pfad                     | Body       | Antwort                                         |
 |---------|--------------------------|------------|-------------------------------------------------|
-| `POST`  | `/api/storage-locations` | `{"name"}` | `201` + Lagerort; `409` wenn der Name existiert |
+| `POST`  | `/api/storage-locations` | `{"name"}` | `201` + `Location`-Header + Lagerort; `409` wenn der Name existiert |
 | `GET`   | `/api/storage-locations` | –          | `200` + Liste, sortiert nach Name               |
 
 Jeder Haushalt hat genau einen Basis-Lagerort „Vorrat“; er ist in der Liste mit `"defaultLocation": true` markiert.
 Namen müssen nur innerhalb eines Haushalts eindeutig sein.
 
 Fehler kommen als `application/problem+json` (`400` bei ungültigen Eingaben oder unbekanntem Lagerort,
-`403` ohne Haushalt, `404` bei unbekannter Artikel- oder Eintrags-ID, `409` bei doppeltem Lagerort-Namen).
+`403` ohne Haushalt, `404` bei unbekannter Artikel- oder Eintrags-ID, `409` bei doppeltem Lagerort-Namen oder wenn
+zwei gleichzeitige Requests an einer Eindeutigkeitsregel kollidieren, `500` mit allgemeiner Meldung bei einem
+Programmfehler).
+Der `Location`-Header einer `201`-Antwort identifiziert das neue Objekt (RFC 9110). Abrufen kann man es dort nicht:
+Einen `GET` auf einzelne Objekte gibt es bisher nur für den Haushalt (`/api/household`); Artikel, Lagerorte und
+manuelle Einträge stehen in ihren Listen. Unter derselben URL ändert oder löscht man Artikel und manuelle Einträge.
 Artikel und Einträge eines anderen Haushalts gelten als unbekannt (`404`), damit niemand fremde IDs ausprobieren kann.
 Ein fehlendes oder ungültiges Token ergibt `401`, ebenfalls als `problem+json`; der Header `WWW-Authenticate` nennt zusätzlich den Grund.
 
@@ -241,6 +263,7 @@ STORAGEKEEPER_LOG_FORMAT=ecs ./gradlew bootRun
 | `STORAGEKEEPER_ISSUER_URI`      | `http://localhost:8180/realms/storagekeeper`     | Issuer der JWTs (Keycloak-Realm)            |
 | `STORAGEKEEPER_MANAGEMENT_PORT` | `8081`                                           | Port für Actuator                           |
 | `STORAGEKEEPER_LOG_FORMAT`      | leer (Text)                                      | `ecs`, `logstash` oder `gelf` für JSON-Logs |
+| `STORAGEKEEPER_API_DOCS_ENABLED`| `true`                                           | `false` schaltet Swagger UI und `/v3/api-docs` ab |
 
 ## Deployment
 
@@ -255,49 +278,126 @@ Keycloak und optional Prometheus, beschrieben in `deploy/compose.yaml`.
 
 Spring Boot baut das Image mit Cloud Native Buildpacks (Paketo), ohne Dockerfile: Java-25-Laufzeit (BellSoft
 Liberica JRE), Speicher-Einstellungen passend zum Container-Limit, Start als Nicht-Root-Nutzer. Das Ergebnis ist
-`ghcr.io/max-ziel/storagekeeper:0.0.1-SNAPSHOT`, zusätzlich getaggt als `:latest`. Ein anderes Repository setzt man
-mit `-PimageRepository=...`, einen weiteren Tag mit `-PimageTag=...`.
+`ghcr.io/max-ziel/storagekeeper:0.7.0` (die Version aus `build.gradle.kts`). Ein anderes Repository setzt man mit
+`-PimageRepository=...`, andere Tags mit `-PimageTags=a,b` (der erste wird der Name, die übrigen zusätzliche Tags).
 
-Die CI (`.github/workflows/ci.yml`, Job `image`) baut das Image bei jedem Push auf `main`, nachdem die Tests grün
-sind, und veröffentlicht es in der GitHub Container Registry, mit den Tags `latest`, Version und Kurz-Hash des Commits.
+Die CI (`.github/workflows/ci.yml`, Job `image`) veröffentlicht in der GitHub Container Registry, nachdem die Tests
+grün sind:
+
+| Auslöser                  | Tags des Images                       |
+|---------------------------|---------------------------------------|
+| Push auf `main`           | `latest` und Kurz-Hash, z. B. `ee780fb` |
+| Git-Tag `v<Version>`      | nur die Version, z. B. `0.7.0`         |
+
+Ein Versions-Tag wird so genau einmal geschrieben und zeigt immer auf denselben Stand. Passt der Git-Tag nicht zur
+Version in `build.gradle.kts`, bricht der Job ab.
 Damit andere das Image ohne Anmeldung ziehen können, muss das Paket auf GitHub einmal auf „public“ gestellt werden
 (Package settings → Change visibility).
+
+### Versionen
+
+Die Version in `build.gradle.kts` folgt dem Milestone (`0.<Milestone>.<Patch>`), Änderungen stehen in
+[CHANGELOG.md](CHANGELOG.md). Ablauf für ein Release:
+
+1. Auf dem Milestone-Branch die Version setzen (z. B. `0.7.0`) und den CHANGELOG ergänzen.
+2. Nach dem Merge `main` taggen: `git tag v0.7.0` und `git push origin v0.7.0`. Die CI veröffentlicht dann das
+   Image `:0.7.0`.
+3. Zu Beginn des nächsten Milestones auf `0.8.0-SNAPSHOT` erhöhen, damit lokale Builds nicht wie ein Release heißen.
+
+Für den Betrieb `STORAGEKEEPER_VERSION` in `.env` auf eine Version setzen statt `latest`; `latest` ist immer der
+neueste Stand von `main`.
 
 ### Starten
 
 ```bash
 cd deploy
-cp .env.example .env      # Passwörter in .env ändern
+cp .env.example .env      # alle Passwörter in .env setzen, z. B. mit: openssl rand -base64 24
 docker compose --env-file .env up -d
 ```
 
-| Dienst       | Port (Host)      | Inhalt                                                                      |
-|--------------|------------------|-----------------------------------------------------------------------------|
-| `app`        | `8080`           | StorageKeeper; Actuator-Port `8081` nur im Compose-Netz                      |
-| `keycloak`   | `8180`           | Anmeldung, Realm `storagekeeper` aus `dev/keycloak` (beim ersten Start)      |
-| `postgres`   | –                | Datenbanken `storagekeeper` und `keycloak`, Daten im Volume `postgres-data` |
-| `prometheus` | `127.0.0.1:9090` | nur mit `--profile monitoring`; holt alle 15 s `app:8081/actuator/prometheus` |
+Ist ein Passwort in `.env` leer, startet der Stack nicht und nennt die fehlende Variable.
 
-| Variable in `.env`        | Bedeutung                                                                     |
-|---------------------------|-------------------------------------------------------------------------------|
-| `STORAGEKEEPER_VERSION`   | Image-Tag, Standard `latest`                                                  |
-| `POSTGRES_PASSWORD`       | Passwort der Datenbank (Pflicht)                                              |
-| `KEYCLOAK_ADMIN_PASSWORD` | Passwort des Keycloak-Admins `admin` (Pflicht)                                |
-| `KEYCLOAK_URL`            | URL, unter der Clients Keycloak erreichen; Standard `http://localhost:8180` |
+| Dienst       | Port (Host)      | Inhalt                                                                         |
+|--------------|------------------|--------------------------------------------------------------------------------|
+| `app`        | `8080`           | StorageKeeper; Actuator-Port `8081` nur im Compose-Netz                         |
+| `keycloak`   | `8180`           | Anmeldung, Realm `storagekeeper` aus `deploy/keycloak` (beim ersten Start)      |
+| `postgres`   | –                | Datenbanken `storagekeeper` und `keycloak`, Daten im Volume `postgres-data`    |
+| `prometheus` | `127.0.0.1:9090` | nur mit `--profile monitoring`; holt alle 15 s `app:8081/actuator/prometheus`   |
 
-Danach funktioniert alles wie unter „Anmeldung“ und „REST-API“ beschrieben. Die Logs der App sind JSON (ECS):
-`docker compose logs -f app`. Mit Prometheus: `docker compose --env-file .env --profile monitoring up -d`,
-dann http://localhost:9090.
+| Variable in `.env`               | Bedeutung                                                                         |
+|----------------------------------|-----------------------------------------------------------------------------------|
+| `STORAGEKEEPER_VERSION`          | Image-Tag, Standard `latest` (neuester Stand von `main`); im Betrieb eine Version, z. B. `0.7.0` |
+| `POSTGRES_PASSWORD`              | Superuser `postgres`, nur für Administration (Pflicht)                            |
+| `STORAGEKEEPER_DB_PASSWORD`      | Datenbank-Login `storagekeeper` der App, sieht nur ihre Datenbank (Pflicht)       |
+| `KEYCLOAK_DB_PASSWORD`           | Datenbank-Login `keycloak`, sieht nur die Keycloak-Datenbank (Pflicht)           |
+| `KEYCLOAK_ADMIN_PASSWORD`        | Passwort des Keycloak-Admins `admin` (Pflicht)                                    |
+| `KEYCLOAK_URL`                   | URL, unter der Clients Keycloak erreichen; Standard `http://localhost:8180`       |
+| `STORAGEKEEPER_URL`              | URL, unter der Browser die App erreichen (Redirect nach dem Login); Standard `http://localhost:8080` |
+| `STORAGEKEEPER_API_DOCS_ENABLED` | `false` schaltet Swagger UI und `/v3/api-docs` ab; Standard `true`                |
+
+Danach legt man in der Keycloak-Admin-Konsole (`KEYCLOAK_URL`, Nutzer `admin`) unter Realm `storagekeeper` →
+*Users* die Nutzer an; der Produktions-Realm enthält keine. Anmelden geht dann über die Swagger UI wie unter
+„API-Dokumentation“ beschrieben. Die Logs der App sind JSON (ECS): `docker compose logs -f app`. Mit Prometheus:
+`docker compose --env-file .env --profile monitoring up -d`, dann http://localhost:9090.
 
 Hinweise:
 
 - **Issuer:** Tokens tragen die öffentliche Keycloak-URL (`KEYCLOAK_URL`) als `iss`. Die App prüft genau diesen
   Issuer, holt die Schlüssel aber direkt im Compose-Netz (`http://keycloak:8080/.../certs`).
-- **Testnutzer:** Der importierte Realm enthält `alice`, `bob` und `carol` mit gleichlautenden Passwörtern. Für
-  echten Betrieb diese Nutzer in der Admin-Konsole löschen und eigene anlegen.
+- **Realm:** `deploy/keycloak/storagekeeper-realm.json` hat keine Nutzer, keinen Passwort-Grant und nur den
+  Browser-Client `storagekeeper-web` (PKCE). Passwörter brauchen mindestens 12 Zeichen, Fehlversuche werden gebremst,
+  Tokens gelten 5 Minuten. Der Entwicklungs-Realm mit `alice`, `bob`, `carol` liegt in `dev/` und wird hier nicht
+  verwendet.
+- **Datenbank-Logins:** Die App und Keycloak haben je einen eigenen Login ohne Superuser-Rechte
+  (`deploy/postgres/init-databases.sh`). Das Skript läuft nur beim ersten Start mit leerem Volume.
+- **Umstieg von einer Installation vor 0.7.0** (gemeinsamer Superuser-Login `storagekeeper`): die neuen Variablen in
+  `.env` eintragen, nur PostgreSQL starten (`docker compose --env-file .env up -d postgres`) und einmalig ausführen
+  (Passwörter wie in `.env`):
+
+  ```bash
+  docker compose --env-file .env exec postgres psql -U storagekeeper -d postgres \
+    -c "CREATE USER keycloak WITH PASSWORD '<KEYCLOAK_DB_PASSWORD>'" \
+    -c "ALTER USER storagekeeper WITH PASSWORD '<STORAGEKEEPER_DB_PASSWORD>'" \
+    -c "ALTER DATABASE keycloak OWNER TO keycloak"
+  docker compose --env-file .env exec postgres psql -U storagekeeper -d keycloak \
+    -c "ALTER SCHEMA public OWNER TO keycloak" \
+    -c "DO \$\$ DECLARE t record; BEGIN FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP EXECUTE format('ALTER TABLE public.%I OWNER TO keycloak', t.tablename); END LOOP; END \$\$"
+  ```
+
+  Danach `docker compose --env-file .env up -d`. Geprüft gegen ein Volume aus M6: Keycloak 26.4 legt in seiner
+  Datenbank nur Tabellen an (keine Views, Sequenzen oder Funktionen; Indizes gehören automatisch dem Eigentümer der
+  Tabelle), deshalb reicht der Besitzerwechsel oben. `REASSIGN OWNED BY storagekeeper` wäre bequemer, würde aber auch
+  die Datenbank `storagekeeper` selbst an `keycloak` übertragen. Bei einem alten Volume gibt es den Superuser
+  `postgres` nicht, `POSTGRES_PASSWORD` wirkt dort also nicht; der Login `storagekeeper` bleibt Superuser. Wer das
+  ändern will, legt das Volume neu an. Der Realm wird nur importiert, wenn er noch nicht existiert: In der Admin-Konsole die
+  Testnutzer und den Client `storagekeeper-cli` löschen und `storagekeeper-web` wie in `deploy/keycloak` anlegen.
+- **Logs:** Jede Logzeile der App enthält die Nutzer-ID (`user.id`), also ein personenbezogenes Pseudonym. Docker
+  hebt höchstens 5 Dateien à 10 MB auf (`logging` in `deploy/compose.yaml`), ältere Zeilen werden gelöscht. Wer Logs
+  zusätzlich an einen Log-Sammler schickt, sollte dort eine Aufbewahrungsfrist festlegen.
 - **HTTPS:** Die Compose-Datei spricht HTTP. Im Internet gehört ein Reverse Proxy mit TLS davor (z. B. Caddy oder
-  Traefik); `KEYCLOAK_URL` ist dann die `https://`-Adresse.
+  Traefik); `KEYCLOAK_URL` und `STORAGEKEEPER_URL` sind dann die `https://`-Adressen.
 - **Stoppen:** `docker compose down` behält die Daten, `docker compose down -v` löscht sie.
+- **Sicherheitslücken** bitte wie in [SECURITY.md](SECURITY.md) beschrieben melden.
+
+## Tests
+
+```bash
+./gradlew test       # alle Tests (braucht Docker)
+./gradlew unitTest   # nur die Tests ohne Docker, in wenigen Sekunden
+./gradlew check      # alle Tests plus Prüfung der Abdeckung (mindestens 90 % Zeilen, 75 % Branches)
+```
+
+| Art                 | Werkzeug                                    | Beispiele                                                       |
+|---------------------|---------------------------------------------|-----------------------------------------------------------------|
+| Domain              | JUnit, AssertJ                              | `PantryItemTest`, `QuantityTest`, `InviteCodeTest`              |
+| Application         | Mockito statt Repositories, feste `Clock`   | `PantryItemServiceTest`, `HouseholdServiceTest`                 |
+| Web                 | `@WebMvcTest` mit echter `SecurityConfiguration` | `PantryItemControllerTest`, `StorageLocationControllerTest` |
+| Persistenz          | `@DataJpaTest` gegen PostgreSQL (Testcontainers) | `JpaPantryItemRepositoryTest`, `HouseholdMigrationTest`     |
+| Ende zu Ende        | `@SpringBootTest` gegen PostgreSQL          | `HouseholdIsolationIntegrationTest`, `ConcurrentRequestsIntegrationTest` |
+| Architektur         | ArchUnit                                    | `ArchitectureTest`                                              |
+
+Tests mit Spring-Kontext und PostgreSQL tragen `@Tag("integration")`; `unitTest` lässt genau diese weg. Der
+Abdeckungsbericht liegt nach `./gradlew test jacocoTestReport` unter `build/reports/jacoco/test/html/index.html`.
 
 ## Paketstruktur
 
@@ -305,9 +405,10 @@ Hinweise:
 io.github.maxziel.storagekeeper
 ├── domain                      # Fachmodell, frei von Spring/Jakarta
 ├── application                 # Services, implementieren die Inbound-Ports
-│   └── port
+│   └── port                    # PageQuery, ResultPage: Paging für Ports beider Richtungen
 │       ├── in                  # Use Cases (von Adaptern aufgerufen)
 │       └── out                 # was die Anwendung von außen braucht
+├── config                      # technische Beans ohne eigene Schicht (ClockConfiguration)
 └── adapter
     ├── in/web                  # REST-Controller, Security- und OpenAPI-Konfiguration, Logging-Kontext
     ├── in/event                # reagiert auf Domain-Events (Einkaufsliste, Metriken)
@@ -317,3 +418,18 @@ io.github.maxziel.storagekeeper
 ```
 
 `ArchitectureTest` (ArchUnit) erzwingt die Abhängigkeitsrichtung: Adapter → Application → Domain, nie umgekehrt.
+Die Application nutzt von Spring nur `@Service`/`@Component` und `@Transactional`; die Domain kennt kein Framework.
+Weitere Regeln: Nichts hängt von `config` ab, und `UpdateShoppingListUseCase` (ohne Haushaltsprüfung) ruft nur der
+Event-Adapter `adapter.in.event` auf.
+
+## Mitwirken
+
+Jeder Milestone entsteht auf einem eigenen Branch und kommt per Pull Request nach `main`, sobald die CI grün ist.
+Commit-Nachrichten haben die Form `M<n> (<teil>/<gesamt>): <Zusammenfassung>`. Schemaänderungen nur als neue
+Flyway-Migration; das Paket `domain` bleibt frei von Spring und Jakarta (prüft `ArchitectureTest`).
+Fehler und Vorschläge bitte als GitHub-Issue, Sicherheitslücken nicht öffentlich, sondern wie in
+[SECURITY.md](SECURITY.md) beschrieben. Dependabot schlägt wöchentlich Updates für Gradle und GitHub Actions vor.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE).
