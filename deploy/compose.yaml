@@ -74,7 +74,7 @@ services:
 
   # Optional: docker compose --env-file .env --profile monitoring up -d
   prometheus:
-    image: prom/prometheus:v3.5.0
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     profiles: [monitoring]
     volumes:
