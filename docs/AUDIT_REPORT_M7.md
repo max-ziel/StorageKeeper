@@ -1,6 +1,11 @@
 # Audit-Report StorageKeeper – Stand Milestone 7
 
 Stand: 2026-11-10, Branch `milestones/milestone7`, Commit `ee780fb` („M7 (3/3): Harden the deployment and version the releases“).
+
+> **Nachtrag:** Abschnitt 8 prüft die Nacharbeiten bis Commit `b119691` („Remove duplicate class“). Ergebnis: Build grün, die neuen Befunde
+> N-01 bis N-04, N-07 und N-09 sind behoben, keiner mit Schweregrad Kritisch oder Hoch ist mehr offen. Offen sind noch einige Mittel-Befunde
+> ohne Einfluss auf das Verhalten (K-01, B-03, R-02, R-05) sowie Niedrig-Befunde und Repo-Einstellungen.
+
 Reines Lese-Audit, am Code wurde nichts geändert. Vergleichsbasis ist der erste Bericht ([AUDIT_REPORT.md](AUDIT_REPORT.md), Commit `12897b7` auf `main`);
 die Befund-IDs von dort werden hier weiterverwendet, neue Befunde haben das Präfix `N-`.
 
@@ -165,3 +170,59 @@ Geprüft und übereinstimmend: neue Umgebungsvariablen (`STORAGEKEEPER_API_DOCS_
 | 6. Tests | geprüft | 236/236 grün, `unitTest` ohne Docker 170/170 |
 | 7. Sicherheit und Konfiguration | teilweise | Prod-Realm und DB-Init praktisch geprüft; Komplett-Stack, Upgrade-Pfad und Schwachstellen-Scan nicht |
 | 8. Konsistenz | geprüft | Abschnitt 5 |
+
+## 8. Nachtrag: Nacharbeiten bis `b119691`
+
+Geprüfter Verlauf auf `milestones/milestone7` nach `ee780fb`:
+
+| Commit | Inhalt | Prüfergebnis |
+|---|---|---|
+| `c627969` | „M7 (4/4): Fix the local Swagger login and tighten conflicts and releases“ | **fehlerhaft:** Client `storagekeeper-web` im Produktions-Realm statt im Dev-Realm eingefügt (doppelt, Keycloak startet nicht: „Duplicate resource error“); Dev-Realm unverändert (`KeycloakRealmFilesTest` rot); `publishRegistry`-Zugangsdaten und `BP_JVM_VERSION` aus `bootBuildImage` entfernt; Testdatei `KeycloakRealFilesTest.java` falsch benannt |
+| `3cd3cd4` + Merge `de553ba` | Korrektur der drei Punkte | Realms und `bootBuildImage` korrekt; **Build rot**: die alte Datei `KeycloakRealFilesTest.java` blieb neben `KeycloakRealmFilesTest.java` liegen → `error: duplicate class` |
+| `b119691` | „Remove duplicate class“ | **grün** |
+
+### 8.1 Was ausgeführt wurde (Stand `b119691`)
+
+| Prüfung | Ergebnis |
+|---|---|
+| `./gradlew clean build jacocoTestReport` (JDK 25, Docker) | BUILD SUCCESSFUL in 59 s; **241 Tests, 0 Fehler, 0 übersprungen**; Abdeckung 98,3 % Zeilen, 84,0 % Branches; Coverage-Gate bestanden |
+| Dev-Realm `dev/keycloak` in Keycloak 26.4 importiert | Import ok; `storagekeeper-web` mit Redirect `http://localhost:8080/swagger-ui/oauth2-redirect.html`, PKCE `S256`; Login-Endpunkt `…/auth?client_id=storagekeeper-web&…` antwortet `200` |
+| Produktions-Realm `deploy/keycloak` importiert (`STORAGEKEEPER_URL=https://pantry.example.org`) | Import ok, genau ein Client `storagekeeper-web`, Redirect aus der Variable aufgelöst; Login-Endpunkt `200` |
+| `./gradlew -q properties --property version` (wie im neuen CI-Schritt) | liefert `0.7.0` → Abgleich Git-Tag ↔ Version funktioniert |
+| Neuer `KeycloakRealmFilesTest` | prüft beide Realm-Dateien gegen `application.yaml` (Client-ID, PKCE, Audience) und den Produktions-Realm auf „keine Nutzer, kein Passwort-Grant“ |
+
+Nicht ausgeführt: Veröffentlichung nach GHCR (Job `image`, nur mit Push auf `main`/Tag), Browser-Login in der Swagger UI, Upgrade-Anleitung gegen ein M6-Volume.
+
+### 8.2 Status der Befunde aus diesem Bericht
+
+| ID | Status | Beleg |
+|---|---|---|
+| N-01 Swagger-Client im Dev-Realm | ✅ | `dev/keycloak/storagekeeper-realm.json`, per Import und Test geprüft |
+| N-02 `409` für alle Constraints | ✅ | `ApiExceptionHandler`: nur SQL-State `23505`/`DuplicateKeyException` → `409`, Rest → `500`; drei neue Controller-Tests |
+| N-03 Veränderlicher Versions-Tag | ✅ | `ci.yml`: `main` → `latest` + Kurz-Hash, Tag `v*` → Version (mit Abgleich); CHANGELOG markiert 0.0.1–0.6.0 als „nicht getaggt“. Tag `v0.7.0` folgt laut README nach dem Merge |
+| N-04 Init-Skript nicht ausführbar | ✅ | Modus `100755` |
+| N-05 Upgrade-Anleitung | ◐ | README ergänzt (nur Tabellen, kein `postgres`-Superuser bei alten Volumes), laut Commit gegen ein M6-Volume geprüft; von mir nicht nachgestellt |
+| N-06 Wildcard-Imports | ❌ verschlechtert | jetzt 11 Produktivdateien (z. B. `ApiExceptionHandler`, `HouseholdJpaEntity`, `PantryItemJpaEntity`) |
+| N-07 Dependabot für Compose-Images | ✅ | Ecosystem `docker-compose` für `/` und `/deploy` |
+| N-08 Doppelte Commits | ❌ | erneut: „M7 (4/4)“ als `c627969` und `3cd3cd4` plus Merge `de553ba` |
+| N-09 Kosmetik Realm / doppelte Felder | ✅ | Leerzeile entfernt; `ExpiringPantryItemResponse` nutzt `@JsonUnwrapped PantryItemResponse` (JSON bleibt flach, Test prüft `$[0].name`) |
+| D-10 Rest „standard-bearer“ | ✅ | `SecurityConfiguration.java:30` |
+| C-06 Formatter | ◐ | `.editorconfig` neu; kein Spotless/Checkstyle, CI prüft das Format nicht. Die Umstellung hat viele Dateien nur umformatiert (Commit `c627969`: +1604/−1277 Zeilen, überwiegend Einrückung) |
+| R-05 Qodana | ◐ | weiterhin zweiter vollständiger Testlauf (`qodana_code_quality.yml:29`) |
+| R-02 Community-Dateien | ◐ | Issue-/PR-Vorlagen, `CODEOWNERS`, `CODE_OF_CONDUCT.md` fehlen |
+| R-09 Repo-Einstellungen | ❌ (manuell) | Private Vulnerability Reporting (für `SECURITY.md`), Dependabot Alerts, Branch Protection für `main` |
+| B-03 Lockfile / Schwachstellen-Scan | ❌ | unverändert |
+| C-09 `Persistable` | ❌ | unverändert |
+| K-01 Sprachmix API | ❌ | unverändert |
+| K-03 Benennung Einkaufsliste | ◐ | `ManualShoppingListRepository` vs. `SpringDataManualShoppingListEntryRepository` |
+| S-06 TLS | ◐ | nur dokumentiert |
+| A-04, C-08, D-11, S-04 | ➖ | bewusst unverändert, weiterhin vertretbar |
+
+### 8.3 Fazit
+
+M7 ist aus Audit-Sicht **bereit zum Merge**: kein offener Befund mit Schweregrad Kritisch oder Hoch mehr, Build und alle Tests grün, beide Realms in Keycloak geprüft.
+Die noch offenen Mittel-Befunde (K-01 Sprachmix, B-03 Lockfile/Scan, R-02 Community-Dateien, R-05 Qodana) betreffen Konsistenz und Repo-Pflege, nicht das Verhalten.
+Nach dem Merge `v0.7.0` taggen und die erste Veröffentlichung im Actions-Log kontrollieren (Job `image`, Tags `latest`/Kurz-Hash bzw. `0.7.0`).
+
+Für einen späteren Milestone bleiben: Formatter mit CI-Prüfung (C-06, beseitigt auch N-06), Qodana ohne zweiten Testlauf (R-05), `Persistable` (C-09), Sprachkonzept der API (K-01),
+Lockfile und Schwachstellen-Scan (B-03), Community-Dateien (R-02) sowie die Repo-Einstellungen (R-09). Gegen doppelte Commits (N-08) hilft `git pull --rebase` vor dem Push.
