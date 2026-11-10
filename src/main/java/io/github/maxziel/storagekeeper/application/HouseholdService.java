@@ -12,6 +12,8 @@ import io.github.maxziel.storagekeeper.domain.HouseholdMember;
 import io.github.maxziel.storagekeeper.domain.HouseholdName;
 import io.github.maxziel.storagekeeper.domain.InviteCode;
 import io.github.maxziel.storagekeeper.domain.StorageLocation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ import java.util.Objects;
 @Service
 public class HouseholdService implements CreateHouseholdUseCase, ShowHouseholdUseCase, JoinHouseholdUseCase {
 
+    private static final Logger log = LoggerFactory.getLogger(HouseholdService.class);
     private final HouseholdRepository householdRepository;
     private final StorageLocationRepository storageLocationRepository;
     private final CurrentUserProvider currentUserProvider;
@@ -42,6 +45,8 @@ public class HouseholdService implements CreateHouseholdUseCase, ShowHouseholdUs
 
         Household household = householdRepository.save(Household.found(name, asMember(user), newInviteCode()));
         storageLocationRepository.save(StorageLocation.createDefault(household.getHouseholdId()));
+
+        log.info("Household {} founded", household.getHouseholdId().value());
         return household;
     }
 
@@ -61,7 +66,11 @@ public class HouseholdService implements CreateHouseholdUseCase, ShowHouseholdUs
         Household household = householdRepository.findByInviteCode(inviteCode)
                 .orElseThrow(UnknownInviteCodeException::new);
         household.join(asMember(user));
-        return householdRepository.save(household);
+
+        Household saved = householdRepository.save(household);
+        log.info("User joined household {}, which now has {} members",
+                saved.getHouseholdId().value(), saved.getMembers().size());
+        return saved;
     }
 
     private void requireNoHousehold(CurrentUser user) {

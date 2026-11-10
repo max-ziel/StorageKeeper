@@ -1,4 +1,4 @@
-# Runs StorageKeeper with everything it needs: docker compose --env-file .env.example up -d (in this directory).
+# Runs StorageKeeper with everything it needs: docker compose --env-file .env up -d (in this directory).
 # Only the API (8080) and Keycloak (8180) are published. The actuator port 8081 stays inside the compose network.
 name: storagekeeper
 
@@ -12,7 +12,7 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/storagekeeper
       SPRING_DATASOURCE_USERNAME: storagekeeper
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.example}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       # Tokens carry the public Keycloak URL as issuer; the keys are fetched inside the network.
       STORAGEKEEPER_ISSUER_URI: ${KEYCLOAK_URL:-http://localhost:8180}/realms/storagekeeper
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/storagekeeper/protocol/openid-connect/certs
@@ -26,7 +26,7 @@ services:
     environment:
       POSTGRES_DB: storagekeeper
       POSTGRES_USER: storagekeeper
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.example}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres-data:/var/lib/postgresql
       # Runs only on the first start with an empty volume: creates the database for Keycloak.
@@ -46,11 +46,11 @@ services:
         condition: service_healthy
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env.example}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: storagekeeper
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.example}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       # The URL clients use; it becomes the "iss" claim of every token.
       KC_HOSTNAME: ${KEYCLOAK_URL:-http://localhost:8180}
       # Plain HTTP is fine on localhost; behind a reverse proxy with HTTPS set KC_PROXY_HEADERS instead.
@@ -60,7 +60,7 @@ services:
     ports:
       - "8180:8080"
 
-  # Optional: docker compose --env-file .env.example --profile monitoring up -d
+  # Optional: docker compose --env-file .env --profile monitoring up -d
   prometheus:
     image: prom/prometheus:v3.5.0
     restart: unless-stopped
