@@ -1,7 +1,8 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M6 Teil 1 (Betrieb: Health-Probes, Metriken mit Prometheus und strukturiertes Logging; Haushalte: jeder
+Stand: M6 (Betrieb: Container-Image und Deployment mit Docker Compose, Health-Probes, Metriken mit Prometheus und
+strukturiertes Logging; Haushalte: jeder
 Nutzer sieht nur den Vorrat seines Haushalts; API nur mit JWT erreichbar; Einkaufsliste mit Vorratseinkäufen über
 Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL).
 
@@ -740,36 +741,67 @@ bekommen, ein Neustart der App würde aber nichts reparieren.
 - Die Application loggt fachlich wichtige Vorgänge mit SLF4J, z. B. `HouseholdService` „Household … founded“
   und Beitritte. SLF4J ist nur eine Logging-Schnittstelle, kein Framework; die Domain loggt nicht.
 
+### Deployment
+
+```mermaid
+flowchart LR
+    User([Client]) -->|":8080 API"| App
+    User -->|":8180 Token holen"| KC
+    subgraph Net["Docker Compose: deploy/compose.yaml"]
+        App["app<br/>ghcr.io/max-ziel/storagekeeper"]
+        KC["keycloak"]
+        PG[("postgres<br/>DBs storagekeeper, keycloak")]
+        Prom["prometheus<br/>(Profil monitoring)"]
+        App -->|JDBC| PG
+        KC -->|JDBC| PG
+        App -->|"Schlüssel (JWKS)<br/>keycloak:8080"| KC
+        Prom -->|"app:8081<br/>/actuator/prometheus"| App
+    end
+```
+
+- **Image:** `bootBuildImage` (Buildpacks) statt Dockerfile. Die Buildpacks wählen JRE, Speicher-Einstellungen
+  und Nutzer, und ein Update des Basis-Images braucht nur einen neuen Build. Konfiguration in `build.gradle.kts`
+  (`BP_JVM_VERSION=25`, Name und Tags); die CI veröffentlicht mit `--publishImage` nach GHCR, Zugangsdaten
+  kommen aus `REGISTRY_USERNAME`/`REGISTRY_PASSWORD`.
+- **Konfiguration nur über Umgebungsvariablen:** Das Image ist für jede Umgebung gleich; `compose.yaml` setzt
+  Datenbank, Issuer und Log-Format. `spring-boot-docker-compose` ist `developmentOnly` und nicht im Image.
+- **Issuer und Schlüssel getrennt:** Clients holen ihr Token über `localhost:8180`, deshalb ist das der Issuer
+  (`KC_HOSTNAME`). Im Container zeigt `localhost` aber auf den Container selbst. Mit
+  `spring.security.oauth2.resourceserver.jwt.jwk-set-uri` holt die App die Schlüssel unter `keycloak:8080`
+  und prüft `iss` trotzdem gegen `STORAGEKEEPER_ISSUER_URI`; ein Token mit anderem Issuer ergibt `401`.
+- **Nur zwei Ports veröffentlicht:** `8080` und `8180`. Der Actuator-Port `8081` ist nur im Compose-Netz
+  erreichbar, Prometheus nur auf `127.0.0.1`.
+
 ## Schichten und Abhängigkeiten
 
 ```mermaid
 flowchart LR
-  Client([HTTP-Client]) --> Web
-  subgraph SG_WEB["adapter.in.web"]
-    Web[PantryItemController]
-  end
-  subgraph SG_APP["application"]
-    PortIn[[Use-Case-Interfaces<br/>port.in]]
-    Service[PantryItemService]
-    PortOut[[PantryItemRepository<br/>port.out]]
-  end
-  subgraph SG_DOM["domain"]
-    Model[PantryItem und Value Objects]
-  end
-  subgraph SG_PERS["adapter.out.persistence"]
-    Repo[JpaPantryItemRepository]
-    Entity[PantryItemJpaEntity]
-    SpringData[[SpringDataPantryItemRepository]]
-  end
-  DB[(PostgreSQL)]
-  Web --> PortIn
-  Service -. implementiert .-> PortIn
-  Service --> Model
-  Service --> PortOut
-  Repo -. implementiert .-> PortOut
-  Repo --> SpringData
-  Repo --> Entity
-  SpringData --> DB
+    Client([HTTP-Client]) --> Web
+    subgraph SG_WEB["adapter.in.web"]
+        Web[PantryItemController]
+    end
+    subgraph SG_APP["application"]
+        PortIn[[Use-Case-Interfaces<br/>port.in]]
+        Service[PantryItemService]
+        PortOut[[PantryItemRepository<br/>port.out]]
+    end
+    subgraph SG_DOM["domain"]
+        Model[PantryItem und Value Objects]
+    end
+    subgraph SG_PERS["adapter.out.persistence"]
+        Repo[JpaPantryItemRepository]
+        Entity[PantryItemJpaEntity]
+        SpringData[[SpringDataPantryItemRepository]]
+    end
+    DB[(PostgreSQL)]
+    Web --> PortIn
+    Service -. implementiert .-> PortIn
+    Service --> Model
+    Service --> PortOut
+    Repo -. implementiert .-> PortOut
+    Repo --> SpringData
+    Repo --> Entity
+    SpringData --> DB
 ```
 
 - Abhängigkeiten zeigen immer nach innen: Adapter → Application → Domain.

@@ -20,13 +20,14 @@ und die ArchUnit-Regeln bleiben bestehen.
 | M3 ✅ | Lagerorte & Ablauf | Lagerorte (Kühlschrank, Keller …), „läuft bald ab“-Abfrage, Mindestbestand je Artikel                              | Domain-Logik mit Clock-Port (testbare Zeit), Query-Use-Cases, Paging/Filter                                                                              |
 | M4 ✅ | Einkaufsliste      | Liste entsteht automatisch, wenn der Mindestbestand unterschritten wird; ein abgehakter Eintrag erhöht den Bestand | Domain-Events (als Spring `ApplicationEvent`s im Adapter), transaktionale Use Cases                                                                      |
 | M5 ✅ | API & Sicherheit   | Mehrere Haushalte/Nutzer, jeder sieht nur seinen Vorrat                                                            | springdoc-OpenAPI, Spring Security mit JWT (OAuth2 Resource Server), Autorisierung im Application-Layer                                                  |
-| M6    | Betrieb            | –                                                                                                                  | Docker-Image (Buildpacks via `bootBuildImage`), Actuator-Metriken, strukturiertes Logging, Deployment-Ziel nach Wahl                                     |
+| M6 ✅ | Betrieb            | –                                                                                                                  | Docker-Image (Buildpacks via `bootBuildImage`), Actuator-Metriken, strukturiertes Logging, Deployment mit Docker Compose                                 |
 
 ### M6 im Detail
 
 - [x] Teil 1: Actuator auf eigenem Port, Health-Probes (`/livez`, `/readyz`), Prometheus-Metriken mit fachlichem
   Event-Zähler, strukturiertes Logging (ECS) mit Nutzer-ID
-- [ ] Teil 2: Docker-Image per `bootBuildImage`, Deployment
+- [x] Teil 2: Docker-Image per `bootBuildImage`, Veröffentlichung in der GitHub Container Registry durch die CI,
+  Deployment mit Docker Compose (`deploy/`: App, PostgreSQL, Keycloak, optional Prometheus)
 
 ### Optional danach
 

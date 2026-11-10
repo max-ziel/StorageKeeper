@@ -48,6 +48,27 @@ springBoot {
     }
 }
 
+// OCI image with Cloud Native Buildpacks: ./gradlew bootBuildImage (needs Docker, no Dockerfile).
+// The CI publishes it to the GitHub Container Registry with --publishImage.
+val imageRepository =
+    providers
+        .gradleProperty("imageRepository")
+        .getOrElse("ghcr.io/max-ziel/storagekeeper")
+
+tasks.bootBuildImage {
+    imageName = "$imageRepository:${project.version}"
+    // The CI adds the commit as an extra tag (-PimageTag=<sha>), so every pushed image can be found again.
+    tags = listOf("$imageRepository:latest") +
+        providers.gradleProperty("imageTag").map { listOf("$imageRepository:$it") }.getOrElse(emptyList())
+    environment = mapOf("BP_JVM_VERSION" to "25")
+    docker {
+        publishRegistry {
+            username = providers.environmentVariable("REGISTRY_USERNAME")
+            password = providers.environmentVariable("REGISTRY_PASSWORD")
+        }
+    }
+}
+
 extra["jackson-2-bom.version"] = "2.21.8"
 
 tasks.withType<Test> {

@@ -242,6 +242,63 @@ STORAGEKEEPER_LOG_FORMAT=ecs ./gradlew bootRun
 | `STORAGEKEEPER_MANAGEMENT_PORT` | `8081`                                           | Port für Actuator                           |
 | `STORAGEKEEPER_LOG_FORMAT`      | leer (Text)                                      | `ecs`, `logstash` oder `gelf` für JSON-Logs |
 
+## Deployment
+
+Das Deployment-Ziel ist ein Rechner mit Docker: Die App läuft als Container-Image zusammen mit PostgreSQL,
+Keycloak und optional Prometheus, beschrieben in `deploy/compose.yaml`.
+
+### Image bauen
+
+```bash
+./gradlew bootBuildImage
+```
+
+Spring Boot baut das Image mit Cloud Native Buildpacks (Paketo), ohne Dockerfile: Java-25-Laufzeit (BellSoft
+Liberica JRE), Speicher-Einstellungen passend zum Container-Limit, Start als Nicht-Root-Nutzer. Das Ergebnis ist
+`ghcr.io/max-ziel/storagekeeper:0.0.1-SNAPSHOT`, zusätzlich getaggt als `:latest`. Ein anderes Repository setzt man
+mit `-PimageRepository=...`, einen weiteren Tag mit `-PimageTag=...`.
+
+Die CI (`.github/workflows/ci.yml`, Job `image`) baut das Image bei jedem Push auf `main`, nachdem die Tests grün
+sind, und veröffentlicht es in der GitHub Container Registry, mit den Tags `latest`, Version und Kurz-Hash des Commits.
+Damit andere das Image ohne Anmeldung ziehen können, muss das Paket auf GitHub einmal auf „public“ gestellt werden
+(Package settings → Change visibility).
+
+### Starten
+
+```bash
+cd deploy
+cp .env.example .env      # Passwörter in .env ändern
+docker compose --env-file .env up -d
+```
+
+| Dienst       | Port (Host)      | Inhalt                                                                      |
+|--------------|------------------|-----------------------------------------------------------------------------|
+| `app`        | `8080`           | StorageKeeper; Actuator-Port `8081` nur im Compose-Netz                      |
+| `keycloak`   | `8180`           | Anmeldung, Realm `storagekeeper` aus `dev/keycloak` (beim ersten Start)      |
+| `postgres`   | –                | Datenbanken `storagekeeper` und `keycloak`, Daten im Volume `postgres-data` |
+| `prometheus` | `127.0.0.1:9090` | nur mit `--profile monitoring`; holt alle 15 s `app:8081/actuator/prometheus` |
+
+| Variable in `.env`        | Bedeutung                                                                     |
+|---------------------------|-------------------------------------------------------------------------------|
+| `STORAGEKEEPER_VERSION`   | Image-Tag, Standard `latest`                                                  |
+| `POSTGRES_PASSWORD`       | Passwort der Datenbank (Pflicht)                                              |
+| `KEYCLOAK_ADMIN_PASSWORD` | Passwort des Keycloak-Admins `admin` (Pflicht)                                |
+| `KEYCLOAK_URL`            | URL, unter der Clients Keycloak erreichen; Standard `http://localhost:8180` |
+
+Danach funktioniert alles wie unter „Anmeldung“ und „REST-API“ beschrieben. Die Logs der App sind JSON (ECS):
+`docker compose logs -f app`. Mit Prometheus: `docker compose --env-file .env --profile monitoring up -d`,
+dann http://localhost:9090.
+
+Hinweise:
+
+- **Issuer:** Tokens tragen die öffentliche Keycloak-URL (`KEYCLOAK_URL`) als `iss`. Die App prüft genau diesen
+  Issuer, holt die Schlüssel aber direkt im Compose-Netz (`http://keycloak:8080/.../certs`).
+- **Testnutzer:** Der importierte Realm enthält `alice`, `bob` und `carol` mit gleichlautenden Passwörtern. Für
+  echten Betrieb diese Nutzer in der Admin-Konsole löschen und eigene anlegen.
+- **HTTPS:** Die Compose-Datei spricht HTTP. Im Internet gehört ein Reverse Proxy mit TLS davor (z. B. Caddy oder
+  Traefik); `KEYCLOAK_URL` ist dann die `https://`-Adresse.
+- **Stoppen:** `docker compose down` behält die Daten, `docker compose down -v` löscht sie.
+
 ## Paketstruktur
 
 ```
