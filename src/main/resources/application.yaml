@@ -17,6 +17,17 @@ spring:
           # The token must be meant for this API ("aud" claim), not just for any client of the issuer.
           audiences: storagekeeper-api
 
+springdoc:
+  api-docs:
+    # Swagger UI and /v3/api-docs; false hides both (404).
+    enabled: ${STORAGEKEEPER_API_DOCS_ENABLED:true}
+  swagger-ui:
+    enabled: ${STORAGEKEEPER_API_DOCS_ENABLED:true}
+    oauth:
+      # "Authorize" logs in at Keycloak in the browser (authorization code with PKCE), no password in the UI.
+      client-id: storagekeeper-web
+      use-pkce-with-authorization-code-grant: true
+
 management:
   server:
     # Actuator gets its own port: monitoring reaches it inside the network, but it is never published to the internet.

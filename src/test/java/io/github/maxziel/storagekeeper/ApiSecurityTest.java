@@ -97,6 +97,20 @@ class ApiSecurityTest {
     }
 
     @Test
+    void openApiDocumentOffersLoginAtTheIssuer() throws Exception {
+        String openIdConnect = "http://localhost:8180/realms/storagekeeper/protocol/openid-connect";
+
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.securitySchemes.keycloak.type").value("oauth2"))
+                .andExpect(jsonPath("$.components.securitySchemes.keycloak.flows.authorizationCode.authorizationUrl")
+                        .value(openIdConnect + "/auth"))
+                .andExpect(jsonPath("$.components.securitySchemes.keycloak.flows.authorizationCode.tokenUrl")
+                        .value(openIdConnect + "/token"))
+                .andExpect(jsonPath("$.security[1].keycloak").exists());
+    }
+
+    @Test
     void swaggerUiIsPublic() throws Exception {
         mockMvc.perform(get("/swagger-ui/index.html"))
                 .andExpect(status().isOk());

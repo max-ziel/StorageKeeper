@@ -1,7 +1,8 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M7 Teil 2 (Fehlerbehandlung: `DomainValidationException`, Konflikte paralleler Requests als `409`, Programmfehler
+Stand: M7 Teil 3 (Betrieb und Sicherheit: Produktions-Realm ohne Testnutzer, Swagger-Login per PKCE, eigene
+Datenbank-Logins, Version 0.7.0, zusätzliche ArchUnit-Regeln); Teil 2 (Fehlerbehandlung: `DomainValidationException`, Konflikte paralleler Requests als `409`, Programmfehler
 als `500` ohne interne Details; Teil 1: Doku an den Code angeglichen, Transaktionsregel, Build und CI);
 davor M6 (Betrieb: Container-Image und Deployment mit Docker Compose, Health-Probes, Metriken mit Prometheus und
 strukturiertes Logging; Haushalte: jeder
@@ -591,8 +592,8 @@ sequenceDiagram
     participant F as Spring Security (Filter)
     participant W as Controller
 
-    C->>K: Benutzername + Passwort
-    K-->>C: JWT (signiert, 1 h gültig)
+    C->>K: Anmeldung im Browser (Authorization Code + PKCE)
+    K-->>C: JWT (signiert, 5 min gültig, lokal 1 h)
     C->>F: GET /api/... mit Authorization: Bearer JWT
     F->>K: öffentliche Schlüssel holen (nur beim ersten Mal, dann gecacht)
     F->>F: Signatur, Ablauf, Issuer und Audience prüfen
@@ -621,6 +622,18 @@ sequenceDiagram
   Security-Filter vor Spring MVC läuft und `@RestControllerAdvice` die Exception sonst nie zu sehen bekäme.
   `detail` ist bei fehlendem Token „A valid bearer token is required.“, bei ungültigem Token der Grund
   (z. B. abgelaufen).
+
+**Clients in Keycloak:**
+
+| Client              | Realm                  | Ablauf                                   | Zweck                                         |
+|---------------------|------------------------|------------------------------------------|-----------------------------------------------|
+| `storagekeeper-web` | Entwicklung, Produktion | Authorization Code mit PKCE (`S256`), öffentlich | Anmeldung im Browser, z. B. Swagger UI |
+| `storagekeeper-cli` | nur Entwicklung        | Passwort-Grant                           | Tokens per `curl` für Tests von Hand          |
+
+Der Passwort-Grant ist in OAuth 2.1 abgeschafft: Die Anwendung bekäme das Passwort zu sehen. Deshalb gibt es ihn nur im
+Entwicklungs-Realm mit den Testnutzern. Beide Clients fügen per Audience-Mapper `storagekeeper-api` in `aud` ein.
+Die erlaubte Redirect-URI des Produktions-Clients setzt Keycloak beim Import aus `STORAGEKEEPER_URL` ein
+(Platzhalter `${STORAGEKEEPER_URL:http://localhost:8080}` in der Realm-Datei).
 
 Der Filter prüft nur, **wer** der Nutzer ist (Authentifizierung). **Was** er sehen darf (Autorisierung),
 entscheidet der Application-Layer, siehe nächster Abschnitt.
@@ -695,8 +708,18 @@ sequenceDiagram
 ## API-Dokumentation
 
 springdoc erzeugt aus den Controllern ein OpenAPI-3-Dokument (`/v3/api-docs`) und die Swagger UI (`/swagger-ui.html`).
-`adapter.in.web.OpenApiConfiguration` ergänzt nur Titel und Beschreibung und meldet das Bearer-Schema an,
-damit die Swagger UI einen „Authorize“-Knopf zeigt. Die Gruppen in der Swagger UI kommen aus `@Tag` an den Controllern.
+`adapter.in.web.OpenApiConfiguration` ergänzt Titel und Beschreibung und meldet zwei Sicherheitsschemata an, von
+denen eins genügt:
+
+| Schema       | Typ                               | Woher                                                                 |
+|--------------|-----------------------------------|-----------------------------------------------------------------------|
+| `bearerAuth` | HTTP Bearer                       | Token von Hand einfügen                                               |
+| `keycloak`   | OAuth2, Authorization Code        | `authorizationUrl`/`tokenUrl` aus `issuer-uri` + `/protocol/openid-connect/auth` bzw. `/token` |
+
+Die Swagger UI füllt die Client-ID aus `springdoc.swagger-ui.oauth.client-id` (`storagekeeper-web`) und nutzt PKCE
+(`use-pkce-with-authorization-code-grant`). Der Browser spricht Keycloak direkt an, deshalb sind die URLs die
+öffentlichen des Issuers. `STORAGEKEEPER_API_DOCS_ENABLED=false` schaltet `springdoc.api-docs.enabled` und
+`springdoc.swagger-ui.enabled` ab; beide Pfade ergeben dann `404` (`ApiDocsDisabledIntegrationTest`). Die Gruppen in der Swagger UI kommen aus `@Tag` an den Controllern.
 
 ## Betrieb: Health, Metriken, Logging
 
@@ -781,7 +804,7 @@ flowchart LR
     subgraph Net["Docker Compose: deploy/compose.yaml"]
         App["app<br/>ghcr.io/max-ziel/storagekeeper"]
         KC["keycloak"]
-        PG[("postgres<br/>DBs storagekeeper, keycloak")]
+        PG[("postgres<br/>DB storagekeeper (Login storagekeeper)<br/>DB keycloak (Login keycloak)")]
         Prom["prometheus<br/>(Profil monitoring)"]
         App -->|JDBC| PG
         KC -->|JDBC| PG
@@ -800,6 +823,12 @@ flowchart LR
   (`KC_HOSTNAME`). Im Container zeigt `localhost` aber auf den Container selbst. Mit
   `spring.security.oauth2.resourceserver.jwt.jwk-set-uri` holt die App die Schlüssel unter `keycloak:8080`
   und prüft `iss` trotzdem gegen `STORAGEKEEPER_ISSUER_URI`; ein Token mit anderem Issuer ergibt `401`.
+- **Getrennte Datenbank-Logins:** `deploy/postgres/init-databases.sh` legt beim ersten Start je Dienst eine Datenbank
+  mit eigenem Login ohne Superuser-Rechte an. Eine Lücke in der App gibt so keinen Zugriff auf die Passwort-Hashes in
+  Keycloaks Datenbank, und umgekehrt.
+- **Eigener Realm für den Betrieb:** `deploy/keycloak` statt `dev/keycloak`: keine Nutzer, kein Passwort-Grant,
+  Passwortregel und Brute-Force-Schutz, 5 Minuten Token-Laufzeit.
+- **Begrenzte Logs:** Der `json-file`-Treiber hält höchstens 5 × 10 MB; die Logs enthalten pseudonyme Nutzer-IDs.
 - **Nur zwei Ports veröffentlicht:** `8080` und `8180`. Der Actuator-Port `8081` ist nur im Compose-Netz
   erreichbar, Prometheus nur auf `127.0.0.1`.
 
@@ -837,6 +866,15 @@ flowchart LR
 
 - Abhängigkeiten zeigen immer nach innen: Adapter → Application → Domain.
 - Die Application kennt nur die Interfaces in `port.out`, nicht deren Implementierung.
+
+`ArchitectureTest` prüft das mit ArchUnit:
+
+| Regel                                             | Inhalt                                                                                      |
+|---------------------------------------------------|---------------------------------------------------------------------------------------------|
+| `portsAndAdapters`                                | Onion-Architektur: Domain ← Application ← Adapter; `config` zählt wie ein Adapter            |
+| `domainIsFrameworkFree`                           | `domain` hängt nicht von Spring oder Jakarta ab                                             |
+| `applicationUsesSpringOnlyForWiringAndTransactions` | `application` nutzt von Spring nur `stereotype` und `transaction.annotation`, kein Jakarta |
+| `shoppingListIsOnlyUpdatedFromDomainEvents`       | `UpdateShoppingListUseCase` prüft keinen Haushalt; nur `adapter.in.event` darf ihn aufrufen |
 
 Beim Wechsel von der In-Memory-Liste (M1) auf PostgreSQL (M2) haben sich Service und Domain deshalb nicht geändert.
 

@@ -57,7 +57,7 @@ public class PantryItem {
     /**
      * Sets the minimum stock in the item's unit. 0 means "no minimum".
      *
-     * @throws IllegalArgumentException if the amount is negative
+     * @throws DomainValidationException if the amount is negative
      */
     public void changeMinimumAmount(BigDecimal newMinimumAmount) {
         boolean wasBelowMinimum = isBelowMinimum();

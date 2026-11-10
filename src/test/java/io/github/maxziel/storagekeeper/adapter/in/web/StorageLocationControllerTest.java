@@ -177,5 +177,4 @@ class StorageLocationControllerTest {
         mockMvc.perform(delete("/api/storage-locations"))
                 .andExpect(status().isMethodNotAllowed());
     }
-    // ...
 }
