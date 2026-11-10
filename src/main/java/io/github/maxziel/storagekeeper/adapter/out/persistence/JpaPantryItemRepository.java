@@ -32,7 +32,6 @@ class JpaPantryItemRepository implements PantryItemRepository {
         this.jpaRepository = jpaRepository;
     }
 
-
     @Override
     public PantryItem save(PantryItem pantryItem) {
         jpaRepository.save(PantryItemJpaEntity.fromDomain(pantryItem));
@@ -53,7 +52,7 @@ class JpaPantryItemRepository implements PantryItemRepository {
         }
 
         jpaRepository.deleteById(pantryItemId.value());
-        return  true;
+        return true;
     }
 
     @Override
@@ -79,7 +78,7 @@ class JpaPantryItemRepository implements PantryItemRepository {
         }
 
         // Sorting by id as well keeps the order stable when names are equal, so no item appears on two pages.
-        PageRequest pageRequest = PageRequest.of(page.page(), page.size(), Sort.by("name","id"));
+        PageRequest pageRequest = PageRequest.of(page.page(), page.size(), Sort.by("name", "id"));
 
         Page<PantryItemJpaEntity> result = jpaRepository.findAll(specification, pageRequest);
 

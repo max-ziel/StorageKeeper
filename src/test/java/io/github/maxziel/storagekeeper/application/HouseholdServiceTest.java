@@ -62,7 +62,9 @@ class HouseholdServiceTest {
     void createDrawsANewCodeIfTheFirstOneIsTaken() {
         Household other = Household.found(new HouseholdName("Andere"), ALICE, InviteCode.generate());
         when(householdRepository.findByMember(BOB.userId())).thenReturn(Optional.empty());
-        when(householdRepository.findByInviteCode(any())).thenReturn(Optional.of(other), Optional.empty());
+        when(householdRepository.findByInviteCode(any()))
+                .thenReturn(Optional.of(other))
+                .thenReturn(Optional.empty());
 
         Household created = service.create(new HouseholdName("WG"));
 

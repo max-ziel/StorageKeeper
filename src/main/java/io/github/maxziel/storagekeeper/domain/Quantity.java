@@ -15,14 +15,14 @@ public record Quantity(BigDecimal amount, Unit unit) {
         Objects.requireNonNull(amount, "amount must not be null");
         Objects.requireNonNull(unit, "unit must not be null");
         if (amount.signum() < 0) {
-            throw  new IllegalArgumentException("amount must not be negative");
+            throw new IllegalArgumentException("amount must not be negative");
         }
     }
 
     /**
-     * Return a new quantity with the give amount and the unit
+     * Returns a new quantity with the given amount and the same unit.
      */
     public Quantity withAmount(BigDecimal newAmount) {
-        return  new Quantity(newAmount, unit);
+        return new Quantity(newAmount, unit);
     }
 }

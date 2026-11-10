@@ -35,7 +35,7 @@ class HouseholdJpaEntity {
     @Column(nullable = false, length = HouseholdName.MAX_LENGTH)
     private String name;
 
-    @Column(name = "invite_code", nullable = false, unique = true, length = 9)
+    @Column(name = "invite_code", nullable = false, unique = true, length = InviteCode.LENGTH)
     private String inviteCode;
 
     @ElementCollection(fetch = FetchType.EAGER)

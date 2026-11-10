@@ -50,7 +50,7 @@ class SecurityConfiguration {
     }
 
     /**
-     * Answers a missing or invalid token with {@code 401}. The standard-bearer entry point sets the status and the
+     * Answers a missing or invalid token with {@code 401}. The standard-bearer token entry point sets the status and the
      * {@code WWW-Authenticate} header (RFC 6750); the body is written by {@link ApiExceptionHandler}, so a 401 is a
      * {@code ProblemDetail} like every other error. The filter runs before Spring MVC, so the exception is handed
      * to MVC's exception resolver explicitly.

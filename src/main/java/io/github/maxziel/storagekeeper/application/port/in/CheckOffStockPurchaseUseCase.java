@@ -6,7 +6,7 @@ import io.github.maxziel.storagekeeper.domain.ShoppingListEntryId;
 import java.math.BigDecimal;
 
 /**
- * Checks iff a stock purchase ("Vorratseinkauf"): the bought amount is added to the item.
+ * Checks off a stock purchase ("Vorratseinkauf"): the bought amount is added to the item.
  * The entry disappears only once the item has reached its minimum again; after partial purchase
  * it stays with the remaining missing amount.
  */

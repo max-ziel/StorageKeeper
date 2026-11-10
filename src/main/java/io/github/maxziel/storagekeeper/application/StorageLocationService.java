@@ -7,6 +7,7 @@ import io.github.maxziel.storagekeeper.domain.HouseholdId;
 import io.github.maxziel.storagekeeper.domain.LocationName;
 import io.github.maxziel.storagekeeper.domain.StorageLocation;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -26,6 +27,7 @@ public class StorageLocationService implements AddStorageLocationUseCase, ListSt
     }
 
     @Override
+    @Transactional
     public StorageLocation add(LocationName name) {
         HouseholdId household = currentHousehold.require();
         if (repository.existsByName(household, name)) {
@@ -35,6 +37,7 @@ public class StorageLocationService implements AddStorageLocationUseCase, ListSt
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<StorageLocation> listAll() {
         return repository.findAll(currentHousehold.require());
     }

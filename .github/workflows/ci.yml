@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # Branches are built through their pull request; a push only triggers a build on main.
   push:
+    branches: [ main ]
   pull_request:
 
 jobs:
@@ -24,8 +26,8 @@ jobs:
     - name: Validate Gradle Wrapper
       uses: gradle/actions/wrapper-validation@v4
 
-    - name: Run Tests
-      run: ./gradlew test jacocoTestReport
+    - name: Build and Test
+      run: ./gradlew build jacocoTestReport
 
     - name: Create coverage-data directory and copy contents
       run: |

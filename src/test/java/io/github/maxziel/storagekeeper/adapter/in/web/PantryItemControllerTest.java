@@ -122,6 +122,19 @@ class PantryItemControllerTest {
     }
 
     @Test
+    void listExpiringContainsTheMinimumStock() throws Exception {
+        PantryItem milk = PantryItem.create(HOUSEHOLD, new ItemName("Milch"), new Quantity(BigDecimal.ONE, Unit.LITER),
+                LocalDate.of(2027, 2, 28), LOCATION);
+        milk.changeMinimumAmount(new BigDecimal("2"));
+        when(listExpiringPantryItems.listExpiringWithin(7)).thenReturn(List.of(new ExpiringPantryItem(milk, 2)));
+
+        mockMvc.perform(get("/api/pantry-items/expiring"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].minimumAmount").value(2))
+                .andExpect(jsonPath("$[0].belowMinimum").value(true));
+    }
+
+    @Test
     void listExpiringUsesSevenDaysByDefault() throws Exception {
         when(listExpiringPantryItems.listExpiringWithin(7)).thenReturn(List.of());
 

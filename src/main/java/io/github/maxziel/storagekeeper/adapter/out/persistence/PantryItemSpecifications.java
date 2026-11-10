@@ -6,9 +6,9 @@ import java.util.UUID;
 
 /**
  * Building blocks for filtered queries on {@link PantryItemJpaEntity}. Each method describes one
- * WHERE condition; {@link JpaPantryItemRepository} combines the ones that arte needed.
+ * WHERE condition; {@link JpaPantryItemRepository} combines the ones that are needed.
  */
-public class PantryItemSpecifications {
+final class PantryItemSpecifications {
 
     private PantryItemSpecifications() {
     }

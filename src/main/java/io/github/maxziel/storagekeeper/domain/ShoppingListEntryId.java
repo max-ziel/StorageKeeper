@@ -4,8 +4,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Identity of a {@link ShoppingListEntry}
- * @param value
+ * Identity of a {@link ShoppingListEntry}.
+ *
+ * @param value the UUID, never {@code null}
  */
 public record ShoppingListEntryId(UUID value) {
 
@@ -19,6 +20,6 @@ public record ShoppingListEntryId(UUID value) {
 
     @Override
     public String toString() {
-        return  value.toString();
+        return value.toString();
     }
 }

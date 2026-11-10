@@ -23,6 +23,7 @@ class UserLoggingContextFilter extends OncePerRequestFilter {
     static final String USER_ID = "user.id";
 
     @Override
+    @SuppressWarnings("try") // the resource is only closed, never used inside the block
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,

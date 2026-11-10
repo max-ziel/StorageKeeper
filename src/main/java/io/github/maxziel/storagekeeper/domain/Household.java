@@ -11,7 +11,7 @@ import java.util.Objects;
  * <p>Invariants: no user is listed twice. That a user belongs to at most one household is a rule across
  * households; it is checked by {@code HouseholdService} and secured by the database.
  */
-public class Household {
+public final class Household {
 
     private final HouseholdId householdId;
     private final HouseholdName name;

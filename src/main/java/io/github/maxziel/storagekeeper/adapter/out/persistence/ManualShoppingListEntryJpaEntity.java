@@ -28,7 +28,7 @@ class ManualShoppingListEntryJpaEntity {
     @Column(name = "household_id", nullable = false)
     private UUID householdId;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = ItemName.MAX_LENGTH)
     private String name;
 
     /** {@code null} together with {@link #unit} if no amount was given. */

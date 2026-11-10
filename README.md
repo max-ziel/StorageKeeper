@@ -1,4 +1,5 @@
 # StorageKeeper
+[![CI](https://github.com/max-ziel/StorageKeeper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/max-ziel/StorageKeeper/actions/workflows/ci.yml)
 [![Qodana](https://github.com/max-ziel/StorageKeeper/actions/workflows/qodana_code_quality.yml/badge.svg)](https://github.com/max-ziel/StorageKeeper/actions/workflows/qodana_code_quality.yml)
 
 Pantry-App – Java 25, Spring Boot 4, Ports & Adapters, Gradle (Kotlin DSL).
@@ -8,7 +9,12 @@ Domain-Modell und Request-Ablauf: [docs/DOMAIN_MODEL.md](docs/DOMAIN_MODEL.md)
 
 ## Build & Start
 
-Voraussetzungen: JDK 25 und ein laufendes Docker (für PostgreSQL).
+Voraussetzungen: JDK 25 und ein laufendes Docker (für PostgreSQL und Keycloak bei `bootRun` und für die Tests,
+die per Testcontainers gegen PostgreSQL laufen).
+
+Gradle lädt ein fehlendes JDK 25 automatisch herunter (Foojay-Toolchain-Resolver). Ist `api.foojay.io` nicht
+erreichbar, z. B. hinter einem Firmen-Proxy, ein lokal installiertes JDK angeben:
+`./gradlew build -Dorg.gradle.java.installations.paths=/pfad/zum/jdk-25`.
 
 ```bash
 ./gradlew build      # kompiliert, testet (inkl. Architekturregeln und Tests gegen PostgreSQL per Testcontainers)
@@ -76,7 +82,7 @@ Reihenfolge, in der sie beigetreten sind. Beim Code ist Groß-/Kleinschreibung e
 |----------|-----------------------------------|-------------------------------------------------------------------------------------|------------------------------------------------|
 | `POST`   | `/api/pantry-items`               | `{"name", "amount", "unit", "expiryDate"?, "storageLocationId"?, "minimumAmount"?}` | `201` + `Location`-Header + Artikel            |
 | `GET`    | `/api/pantry-items`               | `?storageLocationId=&belowMinimum=&page=&size=` (alle optional)                     | `200` + Seite (`content`, `totalElements`, …)  |
-| `GET`    | `/api/pantry-items/expiring`      | `?days=` (optional, 0–365, Standard 7)                                              | `200` + Liste mit `daysUntilExpiry`, `expired` |
+| `GET`    | `/api/pantry-items/expiring`      | `?days=` (optional, 0–365, Standard 7)                                              | `200` + Artikel mit `daysUntilExpiry`, `expired` |
 | `PATCH`  | `/api/pantry-items/{id}/quantity` | `{"amount"}`                                                                        | `200` + Artikel                                |
 | `PATCH`  | `/api/pantry-items/{id}/minimum`  | `{"amount"}` (`0` = kein Mindestbestand)                                            | `200` + Artikel                                |
 | `DELETE` | `/api/pantry-items/{id}`          | –                                                                                   | `204`                                          |
@@ -86,7 +92,8 @@ Reihenfolge, in der sie beigetreten sind. Beim Code ist Groß-/Kleinschreibung e
   keinen Mindestbestand. Ein angegebener Lagerort muss zum eigenen Haushalt gehören.
 - Die Liste ist nach Name sortiert; Standard ist Seite `0` mit `20` Einträgen, höchstens `100` pro Seite.
   `belowMinimum=true` zeigt nur Artikel, deren Menge unter dem Mindestbestand liegt.
-- `/expiring` liefert alles, was in den nächsten `days` Tagen abläuft oder schon abgelaufen ist (`daysUntilExpiry` negativ).
+- `/expiring` liefert alles, was in den nächsten `days` Tagen abläuft oder schon abgelaufen ist (`daysUntilExpiry` negativ),
+  mit denselben Feldern wie ein Artikel (inkl. `minimumAmount` und `belowMinimum`).
 
 ### Einkaufsliste – `/api/shopping-list`
 
@@ -305,9 +312,10 @@ Hinweise:
 io.github.maxziel.storagekeeper
 ├── domain                      # Fachmodell, frei von Spring/Jakarta
 ├── application                 # Services, implementieren die Inbound-Ports
-│   └── port
+│   └── port                    # PageQuery, ResultPage: Paging für Ports beider Richtungen
 │       ├── in                  # Use Cases (von Adaptern aufgerufen)
 │       └── out                 # was die Anwendung von außen braucht
+├── config                      # technische Beans ohne eigene Schicht (ClockConfiguration)
 └── adapter
     ├── in/web                  # REST-Controller, Security- und OpenAPI-Konfiguration, Logging-Kontext
     ├── in/event                # reagiert auf Domain-Events (Einkaufsliste, Metriken)
@@ -317,3 +325,4 @@ io.github.maxziel.storagekeeper
 ```
 
 `ArchitectureTest` (ArchUnit) erzwingt die Abhängigkeitsrichtung: Adapter → Application → Domain, nie umgekehrt.
+Die Application nutzt von Spring nur `@Service`/`@Component` und `@Transactional`; die Domain kennt kein Framework.

@@ -74,11 +74,13 @@ public class PantryItemService implements
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ResultPage<PantryItem> search(PantryItemFilter filter, PageQuery page) {
         return repository.search(currentHousehold.require(), filter, page);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ExpiringPantryItem> listExpiringWithin(int days) {
         if (days < 0) {
             throw new IllegalArgumentException("days must not be negative");

@@ -9,7 +9,7 @@ import java.util.Optional;
  * Unlike a {@link ShoppingListEntry}, it is not linked to a {@link PantryItem}: checking it off
  * simply removes it, the stock does not change. It belongs to exactly one {@link Household}.
  *
- * <p>Invariants: name is set; the quantity is optional, but if given its amount is positive.
+ * <p>Invariants: name and time of adding are set; the quantity is optional, but if given its amount is positive.
  */
 public class ManualShoppingListEntry {
 
@@ -29,15 +29,14 @@ public class ManualShoppingListEntry {
             Quantity quantity,
             Instant addedAt
     ) {
-        if (quantity != null && quantity.amount().signum() <= 0) {
-            throw new IllegalArgumentException("quantity must be positive");
-        }
-
         this.manualShoppingListEntryId = Objects.requireNonNull(manualShoppingListEntryId, "id must not be null");
         this.householdId = Objects.requireNonNull(householdId, "household must not be null");
         this.name = Objects.requireNonNull(name, "name must not be null");
+        this.addedAt = Objects.requireNonNull(addedAt, "addedAt must not be null");
+        if (quantity != null && quantity.amount().signum() <= 0) {
+            throw new IllegalArgumentException("quantity must be positive");
+        }
         this.quantity = quantity;
-        this.addedAt = addedAt;
     }
 
     /**
@@ -77,10 +76,8 @@ public class ManualShoppingListEntry {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-
-        ManualShoppingListEntry that = (ManualShoppingListEntry) o;
-        return manualShoppingListEntryId.equals(that.manualShoppingListEntryId);
+        return o instanceof ManualShoppingListEntry other
+                && manualShoppingListEntryId.equals(other.manualShoppingListEntryId);
     }
 
     @Override

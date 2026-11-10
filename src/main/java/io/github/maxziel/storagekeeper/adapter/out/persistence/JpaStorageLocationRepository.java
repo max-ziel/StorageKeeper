@@ -24,7 +24,7 @@ class JpaStorageLocationRepository implements StorageLocationRepository {
     @Override
     public StorageLocation save(StorageLocation storageLocation) {
         jpaRepository.save(StorageLocationJpaEntity.fromDomain(storageLocation));
-        return  storageLocation;
+        return storageLocation;
     }
 
     @Override
