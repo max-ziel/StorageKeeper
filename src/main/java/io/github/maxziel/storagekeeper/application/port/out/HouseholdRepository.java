@@ -6,13 +6,19 @@ import io.github.maxziel.storagekeeper.domain.UserId;
 
 import java.util.Optional;
 
-/** Storage for households and their members, as needed by the application. */
+/**
+ * Storage for households and their members, as needed by the application.
+ */
 public interface HouseholdRepository {
 
-    /** Inserts or replaces the household together with its members. */
+    /**
+     * Inserts or replaces the household together with its members.
+     */
     Household save(Household household);
 
-    /** The household the user is a member of; a user is in at most one. */
+    /**
+     * The household the user is a member of; a user is in at most one.
+     */
     Optional<Household> findByMember(UserId userId);
 
     Optional<Household> findByInviteCode(InviteCode inviteCode);

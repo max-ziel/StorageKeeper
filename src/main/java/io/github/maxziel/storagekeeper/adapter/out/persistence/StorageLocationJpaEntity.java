@@ -30,7 +30,9 @@ class StorageLocationJpaEntity {
     @Column(name = "default_location", nullable = false)
     private boolean defaultLocation;
 
-    /** Required by JPA. */
+    /**
+     * Required by JPA.
+     */
     protected StorageLocationJpaEntity() {
     }
 
@@ -45,6 +47,6 @@ class StorageLocationJpaEntity {
 
     StorageLocation toDomain() {
         return new StorageLocation(
-                new StorageLocationId(id), new HouseholdId(householdId), new LocationName(name), defaultLocation);
+            new StorageLocationId(id), new HouseholdId(householdId), new LocationName(name), defaultLocation);
     }
 }

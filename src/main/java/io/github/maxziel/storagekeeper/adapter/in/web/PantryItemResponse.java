@@ -19,13 +19,13 @@ public record PantryItemResponse(UUID id, String name, BigDecimal amount, Unit u
 
     static PantryItemResponse from(PantryItem pantryItem) {
         return new PantryItemResponse(
-                pantryItem.getPantryItemId().value(),
-                pantryItem.getItemName().value(),
-                pantryItem.getQuantity().amount(),
-                pantryItem.getQuantity().unit(),
-                pantryItem.getExpiryDate().orElse(null),
-                pantryItem.getStorageLocationId().value(),
-                pantryItem.getMinimumQuantity().amount(),
-                pantryItem.isBelowMinimum());
+            pantryItem.getPantryItemId().value(),
+            pantryItem.getItemName().value(),
+            pantryItem.getQuantity().amount(),
+            pantryItem.getQuantity().unit(),
+            pantryItem.getExpiryDate().orElse(null),
+            pantryItem.getStorageLocationId().value(),
+            pantryItem.getMinimumQuantity().amount(),
+            pantryItem.isBelowMinimum());
     }
 }

@@ -5,6 +5,8 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 
-/** JSON body for {@code PATCH /api/pantry-items/{id}/quantity}. */
+/**
+ * JSON body for {@code PATCH /api/pantry-items/{id}/quantity}.
+ */
 public record ChangeQuantityRequest(@NotNull @PositiveOrZero BigDecimal amount) {
 }

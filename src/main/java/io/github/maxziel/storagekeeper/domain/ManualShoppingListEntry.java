@@ -23,11 +23,11 @@ public class ManualShoppingListEntry {
      * Restores an entry with a known id, e.g. when loading it from storage. Use {@link #create} for new entries.
      */
     public ManualShoppingListEntry(
-            ManualShoppingListEntryId manualShoppingListEntryId,
-            HouseholdId householdId,
-            ItemName name,
-            Quantity quantity,
-            Instant addedAt
+        ManualShoppingListEntryId manualShoppingListEntryId,
+        HouseholdId householdId,
+        ItemName name,
+        Quantity quantity,
+        Instant addedAt
     ) {
         this.manualShoppingListEntryId = Objects.requireNonNull(manualShoppingListEntryId, "id must not be null");
         this.householdId = Objects.requireNonNull(householdId, "household must not be null");
@@ -57,7 +57,9 @@ public class ManualShoppingListEntry {
         return householdId;
     }
 
-    /** {@code true} if the entry is on this household's shopping list. */
+    /**
+     * {@code true} if the entry is on this household's shopping list.
+     */
     public boolean belongsTo(HouseholdId household) {
         return householdId.equals(household);
     }
@@ -77,7 +79,7 @@ public class ManualShoppingListEntry {
     @Override
     public boolean equals(Object o) {
         return o instanceof ManualShoppingListEntry other
-                && manualShoppingListEntryId.equals(other.manualShoppingListEntryId);
+            && manualShoppingListEntryId.equals(other.manualShoppingListEntryId);
     }
 
     @Override

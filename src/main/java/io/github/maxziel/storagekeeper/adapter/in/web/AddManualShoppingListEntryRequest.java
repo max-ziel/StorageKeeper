@@ -18,9 +18,9 @@ import java.math.BigDecimal;
  * @param unit   optional unit of {@code amount}
  */
 public record AddManualShoppingListEntryRequest(
-        @NotBlank @Size(max = ItemName.MAX_LENGTH) String name,
-        @Positive BigDecimal amount,
-        Unit unit
+    @NotBlank @Size(max = ItemName.MAX_LENGTH) String name,
+    @Positive BigDecimal amount,
+    Unit unit
 ) {
 
     /**

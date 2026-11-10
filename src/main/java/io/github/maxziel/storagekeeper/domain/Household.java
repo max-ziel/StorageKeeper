@@ -31,7 +31,9 @@ public final class Household {
         Objects.requireNonNull(members, "members must not be null").forEach(this::join);
     }
 
-    /** Creates a new household with a fresh id; the founder is its first member. */
+    /**
+     * Creates a new household with a fresh id; the founder is its first member.
+     */
     public static Household found(HouseholdName name, HouseholdMember founder, InviteCode inviteCode) {
         return new Household(HouseholdId.newId(), name, inviteCode, List.of(founder));
     }
@@ -65,7 +67,9 @@ public final class Household {
         return inviteCode;
     }
 
-    /** The members in the order they joined; unmodifiable. */
+    /**
+     * The members in the order they joined; unmodifiable.
+     */
     public List<HouseholdMember> getMembers() {
         return List.copyOf(members);
     }

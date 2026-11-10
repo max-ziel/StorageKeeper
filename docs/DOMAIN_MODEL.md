@@ -1,7 +1,8 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M7 Teil 3 (Betrieb und Sicherheit: Produktions-Realm ohne Testnutzer, Swagger-Login per PKCE, eigene
+Stand: M7 Teil 4 (Nacharbeiten aus dem zweiten Audit: Swagger-Client im Dev-Realm, `409` nur bei Unique-Verletzung,
+Image-Versionen nur aus Git-Tags); Teil 3 (Betrieb und Sicherheit: Produktions-Realm ohne Testnutzer, Swagger-Login per PKCE, eigene
 Datenbank-Logins, Version 0.7.0, zusätzliche ArchUnit-Regeln); Teil 2 (Fehlerbehandlung: `DomainValidationException`, Konflikte paralleler Requests als `409`, Programmfehler
 als `500` ohne interne Details; Teil 1: Doku an den Code angeglichen, Transaktionsregel, Build und CI);
 davor M6 (Betrieb: Container-Image und Deployment mit Docker Compose, Health-Probes, Metriken mit Prometheus und
@@ -633,7 +634,10 @@ sequenceDiagram
 Der Passwort-Grant ist in OAuth 2.1 abgeschafft: Die Anwendung bekäme das Passwort zu sehen. Deshalb gibt es ihn nur im
 Entwicklungs-Realm mit den Testnutzern. Beide Clients fügen per Audience-Mapper `storagekeeper-api` in `aud` ein.
 Die erlaubte Redirect-URI des Produktions-Clients setzt Keycloak beim Import aus `STORAGEKEEPER_URL` ein
-(Platzhalter `${STORAGEKEEPER_URL:http://localhost:8080}` in der Realm-Datei).
+(Platzhalter `${STORAGEKEEPER_URL:http://localhost:8080}` in der Realm-Datei). `KeycloakRealmFilesTest` prüft ohne
+Keycloak, dass beide Realm-Dateien den Client enthalten, den `springdoc.swagger-ui.oauth.client-id` nennt (PKCE,
+Redirect auf die Swagger UI, Audience aus `application.yaml`), und dass der Produktions-Realm keine Nutzer und keinen
+Passwort-Grant hat.
 
 Der Filter prüft nur, **wer** der Nutzer ist (Authentifizierung). **Was** er sehen darf (Autorisierung),
 entscheidet der Application-Layer, siehe nächster Abschnitt.
@@ -937,9 +941,9 @@ sequenceDiagram
 | `inviteCode`                    | `getInviteCode().value()`                             |
 | `members`                       | Namen aus `getMembers()`; die User-IDs bleiben intern |
 
-`ExpiringPantryItemResponse` (für `/expiring`) enthält dieselben Felder wie `PantryItemResponse`
-(`minimumAmount` und `belowMinimum` seit M7) plus `daysUntilExpiry` (aus `ExpiringPantryItem.daysUntilExpiry()`)
-und `expired` (aus `expired()`).
+`ExpiringPantryItemResponse` (für `/expiring`) enthält eine `PantryItemResponse` mit `@JsonUnwrapped`: Deren Felder
+stehen im JSON auf derselben Ebene, und ein neues Feld dort erscheint hier automatisch. Dazu kommen
+`daysUntilExpiry` (aus `ExpiringPantryItem.daysUntilExpiry()`) und `expired` (aus `expired()`).
 
 Die Request-DTOs (`AddPantryItemRequest`, `ChangeQuantityRequest`) prüfen Eingaben bereits per Bean Validation,
 damit der Client verständliche Fehler bekommt. Die Domain prüft trotzdem selbst; sie ist die eigentliche Absicherung.
@@ -960,7 +964,8 @@ Alle Fehler werden als `application/problem+json` (RFC 9457, `ProblemDetail`) zu
 | Nutzer ohne Haushalt (`NoHouseholdException`)                           | 403         |
 | Schon Mitglied eines Haushalts (`AlreadyInHouseholdException`)          | 409         |
 | Einladungscode unbekannt (`UnknownInviteCodeException`)                 | 400         |
-| DB-Constraint verletzt (`DataIntegrityViolationException`)              | 409         |
+| Unique-Constraint verletzt (SQL-State `23505`, `DuplicateKeyException`) | 409         |
+| anderer DB-Constraint verletzt (CHECK, NOT NULL, Fremdschlüssel)        | 500         |
 | alles andere, z. B. `IllegalStateException` (Programmfehler)            | 500         |
 
 `ApiExceptionHandler` erweitert Springs `ResponseEntityExceptionHandler`. Dieser beantwortet die Fehler von Spring MVC
@@ -973,6 +978,11 @@ können beide die Prüfung bestehen. Dann lehnt die Datenbank den zweiten ab (`u
 Primärschlüssel von `household_member`, `UNIQUE invite_code`), und der Client bekommt `409` mit einer allgemeinen
 Meldung („Please reload and try again“). Die Datenbank-Meldung nennt Tabellen und Spalten, deshalb steht sie nur im
 Log (`WARN`). `ConcurrentRequestsIntegrationTest` erzwingt diese Lücke mit einer `CyclicBarrier` im Repository-Spy.
+
+Nur Unique-Verletzungen sind solche Konflikte. CHECK-, NOT-NULL- und Fremdschlüssel-Constraints sichern Regeln, die
+Domain und Services schon vorher prüfen; schlägt einer an, ist das ein Programmfehler und ergibt `500` mit
+`ERROR`-Log. Erkannt wird die Unique-Verletzung am SQL-State `23505` in der Ursachenkette, denn über Hibernate kommt
+sie als allgemeine `DataIntegrityViolationException` an, nicht als Springs `DuplicateKeyException`.
 
 **Programmfehler** (`500`) werden mit Stacktrace als `ERROR` geloggt; der Client bekommt nur
 „An unexpected error occurred.“
@@ -1108,29 +1118,29 @@ Datenbank bis V6, füllt sie und migriert dann weiter.
 
 ```mermaid
 classDiagram
-  direction LR
+    direction LR
 
-  class PantryItem {
-    Domain, ohne JPA
-  }
-  class PantryItemJpaEntity {
-    -UUID id
-    -String name
-    -BigDecimal amount
-    -Unit unit
-    -LocalDate expiryDate
-    ~fromDomain(PantryItem item)$ PantryItemJpaEntity
-    ~toDomain() PantryItem
-  }
-  class SpringDataPantryItemRepository {
-    JpaRepository von PantryItemJpaEntity und UUID
-  }
-  class JpaPantryItemRepository
+    class PantryItem {
+        Domain, ohne JPA
+    }
+    class PantryItemJpaEntity {
+        -UUID id
+        -String name
+        -BigDecimal amount
+        -Unit unit
+        -LocalDate expiryDate
+        ~fromDomain(PantryItem item)$ PantryItemJpaEntity
+        ~toDomain() PantryItem
+    }
+    class SpringDataPantryItemRepository {
+        JpaRepository von PantryItemJpaEntity und UUID
+    }
+    class JpaPantryItemRepository
 
-  JpaPantryItemRepository ..|> PantryItemRepository
-  JpaPantryItemRepository --> SpringDataPantryItemRepository
-  SpringDataPantryItemRepository --> PantryItemJpaEntity
-  PantryItemJpaEntity ..> PantryItem : mappt
+    JpaPantryItemRepository ..|> PantryItemRepository
+    JpaPantryItemRepository --> SpringDataPantryItemRepository
+    SpringDataPantryItemRepository --> PantryItemJpaEntity
+    PantryItemJpaEntity ..> PantryItem : mappt
 ```
 
 JPA verlangt einen parameterlosen Konstruktor und veränderbare Felder. Würde `PantryItem` selbst

@@ -9,7 +9,9 @@ import java.util.Objects;
  */
 public class StorageLocation {
 
-    /** Name of the default location every household gets when it is created. */
+    /**
+     * Name of the default location every household gets when it is created.
+     */
     public static final LocationName DEFAULT_NAME = new LocationName("Vorrat");
 
     private final StorageLocationId storageLocationId;
@@ -36,7 +38,9 @@ public class StorageLocation {
         return new StorageLocation(StorageLocationId.newId(), householdId, locationName, false);
     }
 
-    /** Creates the default location "Vorrat" for a new household. */
+    /**
+     * Creates the default location "Vorrat" for a new household.
+     */
     public static StorageLocation createDefault(HouseholdId householdId) {
         return new StorageLocation(StorageLocationId.newId(), householdId, DEFAULT_NAME, true);
     }
@@ -49,7 +53,9 @@ public class StorageLocation {
         return householdId;
     }
 
-    /** {@code true} if the location is part of this household's pantry. */
+    /**
+     * {@code true} if the location is part of this household's pantry.
+     */
     public boolean belongsTo(HouseholdId household) {
         return householdId.equals(household);
     }
@@ -58,7 +64,9 @@ public class StorageLocation {
         return locationName;
     }
 
-    /** {@code true} for the household's base location that new items go to when no location is given. */
+    /**
+     * {@code true} for the household's base location that new items go to when no location is given.
+     */
     public boolean isDefault() {
         return defaultLocation;
     }

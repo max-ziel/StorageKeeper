@@ -54,18 +54,18 @@ val imageRepository =
         .gradleProperty("imageRepository")
         .getOrElse("ghcr.io/max-ziel/storagekeeper")
 
+// Image tags, comma separated: -PimageTags=latest,1a2b3c4. Without the property the project version, for a local
+// build. The CI publishes "latest" and the commit for main and the version only for a release tag (v<version>),
+// so a version tag always means the same image.
+val imageTags =
+    providers
+        .gradleProperty("imageTags")
+        .map { tags -> tags.split(",").map(String::trim).filter(String::isNotEmpty) }
+        .getOrElse(listOf(project.version.toString()))
+
 tasks.bootBuildImage {
-    imageName = "$imageRepository:${project.version}"
-    // The CI adds the commit as an extra tag (-PimageTag=<sha>), so every pushed image can be found again.
-    tags = listOf("$imageRepository:latest") +
-        providers.gradleProperty("imageTag").map { listOf("$imageRepository:$it") }.getOrElse(emptyList())
-    environment = mapOf("BP_JVM_VERSION" to "25")
-    docker {
-        publishRegistry {
-            username = providers.environmentVariable("REGISTRY_USERNAME")
-            password = providers.environmentVariable("REGISTRY_PASSWORD")
-        }
-    }
+    imageName = "$imageRepository:${imageTags.first()}"
+    tags = imageTags.drop(1).map { "$imageRepository:$it" }
 }
 
 /*
@@ -77,6 +77,9 @@ extra["jackson-2-bom.version"] = "2.21.8"
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // KeycloakRealmFilesTest reads these files; a change must rerun the tests instead of counting as up to date.
+    inputs.dir("dev/keycloak").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir("deploy/keycloak").withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // Quick feedback without Docker: all tests except those tagged "integration" (Spring context, PostgreSQL via

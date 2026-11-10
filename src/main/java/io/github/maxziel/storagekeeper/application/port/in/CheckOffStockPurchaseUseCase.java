@@ -15,7 +15,7 @@ public interface CheckOffStockPurchaseUseCase {
     /**
      * @return the item with its new stock
      * @throws io.github.maxziel.storagekeeper.application.ShoppingListEntryNotFoundException if there is no such entry
-     * @throws io.github.maxziel.storagekeeper.domain.DomainValidationException if the amount is not positive
+     * @throws io.github.maxziel.storagekeeper.domain.DomainValidationException               if the amount is not positive
      */
     PantryItem checkOff(ShoppingListEntryId shoppingListEntryId, BigDecimal purchasedAmount);
 }

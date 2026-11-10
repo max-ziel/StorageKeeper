@@ -27,9 +27,9 @@ class DomainEventMetrics {
     void on(DomainEvent event) {
         // register() returns the existing counter if there already is one with this name and tag.
         Counter.builder(METRIC_NAME)
-                .description("Domain events whose transaction was committed")
-                .tag("type", event.getClass().getSimpleName())
-                .register(metricRegistry)
-                .increment();
+            .description("Domain events whose transaction was committed")
+            .tag("type", event.getClass().getSimpleName())
+            .register(metricRegistry)
+            .increment();
     }
 }

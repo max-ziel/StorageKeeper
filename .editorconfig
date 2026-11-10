@@ -1,0 +1,21 @@
+# Basic formatting for every editor (IntelliJ reads this file too).
+root = true
+
+[*]
+charset = utf-8
+# LF everywhere: shell scripts in containers break with CRLF.
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+# Two trailing spaces are a line break in Markdown.
+trim_trailing_whitespace = false
+
+[*.bat]
+end_of_line = crlf

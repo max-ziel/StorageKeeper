@@ -35,14 +35,18 @@ class PantryItemJpaEntity {
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
 
-    /** Plain id instead of a JPA relation: items and locations are separate aggregates. */
+    /**
+     * Plain id instead of a JPA relation: items and locations are separate aggregates.
+     */
     @Column(name = "storage_location_id", nullable = false)
     private UUID storageLocationId;
 
     @Column(name = "minimum_amount", nullable = false)
     private BigDecimal minimumAmount;
 
-    /** Required by JPA. */
+    /**
+     * Required by JPA.
+     */
     protected PantryItemJpaEntity() {
     }
 
@@ -63,12 +67,12 @@ class PantryItemJpaEntity {
 
     PantryItem toDomain() {
         return new PantryItem(
-                new PantryItemId(id),
-                new HouseholdId(householdId),
-                new ItemName(name),
-                new Quantity(amount, unit),
-                expiryDate,
-                new StorageLocationId(storageLocationId),
-                minimumAmount);
+            new PantryItemId(id),
+            new HouseholdId(householdId),
+            new ItemName(name),
+            new Quantity(amount, unit),
+            expiryDate,
+            new StorageLocationId(storageLocationId),
+            minimumAmount);
     }
 }

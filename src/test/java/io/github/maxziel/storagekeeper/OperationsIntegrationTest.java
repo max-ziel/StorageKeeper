@@ -55,17 +55,32 @@ class OperationsIntegrationTest {
     private RestClient api;
     private RestClient management;
 
+    private static String read(ResponseEntity<String> response, String jsonPath) {
+        return JsonPath.read(response.getBody(), jsonPath);
+    }
+
+    /**
+     * Returns every response as it is; the tests check the status themselves.
+     */
+    private static RestClient client(int port) {
+        return RestClient.builder()
+            .baseUrl("http://localhost:" + port)
+            .defaultStatusHandler(_ -> true, (_, _) -> {
+            })
+            .build();
+    }
+
     @BeforeEach
     void setUp() {
         api = client(serverPort);
         management = client(managementPort);
         when(jwtDecoder.decode(TOKEN)).thenReturn(Jwt.withTokenValue(TOKEN)
-                .header("alg", "none")
-                .subject("sub-operations-test")
-                .claim("preferred_username", "olivia")
-                .issuedAt(Instant.now())
-                .expiresAt(Instant.now().plusSeconds(3600))
-                .build());
+            .header("alg", "none")
+            .subject("sub-operations-test")
+            .claim("preferred_username", "olivia")
+            .issuedAt(Instant.now())
+            .expiresAt(Instant.now().plusSeconds(3600))
+            .build());
     }
 
     @Test
@@ -85,9 +100,9 @@ class OperationsIntegrationTest {
     @Test
     void readinessDependsOnTheDatabaseButLivenessDoesNot() {
         ResponseEntity<String> readiness = management.get().uri("/actuator/health/readiness")
-                .retrieve().toEntity(String.class);
+            .retrieve().toEntity(String.class);
         ResponseEntity<String> liveness = management.get().uri("/actuator/health/liveness")
-                .retrieve().toEntity(String.class);
+            .retrieve().toEntity(String.class);
 
         assertThat(read(readiness, "$.status")).isEqualTo("UP");
         assertThat(JsonPath.<Object>read(readiness.getBody(), "$.components")).asString().contains("db");
@@ -128,27 +143,27 @@ class OperationsIntegrationTest {
     @Test
     void prometheusShowsRequestAndDomainEventMetrics() {
         callApi("/api/household", """
-                {"name": "Betrieb"}
-                """);
+            {"name": "Betrieb"}
+            """);
         String itemId = JsonPath.read(callApi("/api/pantry-items", """
-                {"name": "Mehl", "amount": 3, "unit": "KILOGRAM", "minimumAmount": 2}
-                """), "$.id");
+            {"name": "Mehl", "amount": 3, "unit": "KILOGRAM", "minimumAmount": 2}
+            """), "$.id");
         ResponseEntity<String> changed = api.patch().uri("/api/pantry-items/{id}/quantity", itemId)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body("""
-                        {"amount": 1}
-                        """)
-                .retrieve().toEntity(String.class);
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body("""
+                {"amount": 1}
+                """)
+            .retrieve().toEntity(String.class);
         assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         String metrics = management.get().uri("/actuator/prometheus").retrieve().body(String.class);
 
         assertThat(metrics)
-                .contains("storagekeeper_domain_events_total{application=\"storagekeeper\","
-                        + "type=\"PantryItemFellBelowMinimum\"} 1.0")
-                .contains("http_server_requests_seconds_bucket")
-                .contains("uri=\"/api/pantry-items/{id}/quantity\"");
+            .contains("storagekeeper_domain_events_total{application=\"storagekeeper\","
+                + "type=\"PantryItemFellBelowMinimum\"} 1.0")
+            .contains("http_server_requests_seconds_bucket")
+            .contains("uri=\"/api/pantry-items/{id}/quantity\"");
     }
 
     @Test
@@ -159,28 +174,16 @@ class OperationsIntegrationTest {
         });
 
         assertThat(meterRegistry.find("storagekeeper.domain.events")
-                .tag("type", "PantryItemReachedMinimum").counter()).isNull();
+            .tag("type", "PantryItemReachedMinimum").counter()).isNull();
     }
 
     private String callApi(String path, String body) {
         ResponseEntity<String> response = api.post().uri(path)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve().toEntity(String.class);
+            .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(body)
+            .retrieve().toEntity(String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return response.getBody();
-    }
-
-    private static String read(ResponseEntity<String> response, String jsonPath) {
-        return JsonPath.read(response.getBody(), jsonPath);
-    }
-
-    /** Returns every response as it is; the tests check the status themselves. */
-    private static RestClient client(int port) {
-        return RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .defaultStatusHandler(_ -> true, (_, _) -> { })
-                .build();
     }
 }

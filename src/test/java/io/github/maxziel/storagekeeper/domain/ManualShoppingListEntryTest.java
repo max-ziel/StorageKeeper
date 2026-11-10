@@ -22,7 +22,7 @@ class ManualShoppingListEntryTest {
     @Test
     void quantityMustBePositive() {
         assertThatIllegalArgumentException().isThrownBy(() -> ManualShoppingListEntry.create(HOUSEHOLD,
-                new ItemName("Kerzen"), new Quantity(BigDecimal.ZERO, Unit.PIECE), NOW));
+            new ItemName("Kerzen"), new Quantity(BigDecimal.ZERO, Unit.PIECE), NOW));
     }
 
     @Test
@@ -30,13 +30,13 @@ class ManualShoppingListEntryTest {
         ManualShoppingListEntryId id = ManualShoppingListEntryId.newId();
 
         assertThat(new ManualShoppingListEntry(id, HOUSEHOLD, new ItemName("Kerzen"), null, NOW))
-                .isEqualTo(new ManualShoppingListEntry(id, HOUSEHOLD, new ItemName("Ballons"), null, NOW.plusSeconds(60)));
+            .isEqualTo(new ManualShoppingListEntry(id, HOUSEHOLD, new ItemName("Ballons"), null, NOW.plusSeconds(60)));
     }
 
     @Test
     void timeOfAddingIsRequired() {
         assertThatNullPointerException()
-                .isThrownBy(() -> ManualShoppingListEntry.create(HOUSEHOLD, new ItemName("Kerzen"), null, null))
-                .withMessage("addedAt must not be null");
+            .isThrownBy(() -> ManualShoppingListEntry.create(HOUSEHOLD, new ItemName("Kerzen"), null, null))
+            .withMessage("addedAt must not be null");
     }
 }

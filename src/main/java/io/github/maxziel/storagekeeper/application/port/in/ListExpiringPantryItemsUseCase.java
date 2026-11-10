@@ -2,7 +2,9 @@ package io.github.maxziel.storagekeeper.application.port.in;
 
 import java.util.List;
 
-/** Lists items that expire soon or have already expired. */
+/**
+ * Lists items that expire soon or have already expired.
+ */
 public interface ListExpiringPantryItemsUseCase {
 
     /**

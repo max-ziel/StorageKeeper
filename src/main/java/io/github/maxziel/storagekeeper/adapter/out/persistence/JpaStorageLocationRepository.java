@@ -11,7 +11,9 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-/** Implements the {@link StorageLocationRepository} port with PostgreSQL via Spring Data JPA. */
+/**
+ * Implements the {@link StorageLocationRepository} port with PostgreSQL via Spring Data JPA.
+ */
 @Repository
 class JpaStorageLocationRepository implements StorageLocationRepository {
 
@@ -30,9 +32,9 @@ class JpaStorageLocationRepository implements StorageLocationRepository {
     @Override
     public List<StorageLocation> findAll(HouseholdId householdId) {
         return jpaRepository.findByHouseholdId(householdId.value(), Sort.by("name"))
-                .stream()
-                .map(StorageLocationJpaEntity::toDomain)
-                .toList();
+            .stream()
+            .map(StorageLocationJpaEntity::toDomain)
+            .toList();
     }
 
     @Override
@@ -43,7 +45,7 @@ class JpaStorageLocationRepository implements StorageLocationRepository {
     @Override
     public Optional<StorageLocation> findDefault(HouseholdId householdId) {
         return jpaRepository.findByHouseholdIdAndDefaultLocationTrue(householdId.value())
-                .map(StorageLocationJpaEntity::toDomain);
+            .map(StorageLocationJpaEntity::toDomain);
     }
 
     @Override

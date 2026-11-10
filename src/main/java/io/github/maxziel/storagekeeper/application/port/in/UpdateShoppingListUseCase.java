@@ -8,9 +8,13 @@ import io.github.maxziel.storagekeeper.domain.PantryItemId;
  */
 public interface UpdateShoppingListUseCase {
 
-    /** Puts the item on the list; does nothing if it is already there. */
+    /**
+     * Puts the item on the list; does nothing if it is already there.
+     */
     void addItem(PantryItemId pantryItemId);
 
-    /** Takes the item off the list; does nothing if it is not there. */
+    /**
+     * Takes the item off the list; does nothing if it is not there.
+     */
     void removeItem(PantryItemId pantryItemId);
 }

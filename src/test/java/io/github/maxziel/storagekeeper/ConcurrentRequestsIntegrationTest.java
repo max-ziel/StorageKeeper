@@ -16,12 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ConcurrentRequestsIntegrationTest {
 
     private static final String CONFLICT_DETAIL =
-            "The request conflicts with data that was changed at the same time. Please reload and try again.";
+        "The request conflicts with data that was changed at the same time. Please reload and try again.";
 
     @Autowired
     private MockMvc mockMvc;
@@ -52,6 +47,11 @@ class ConcurrentRequestsIntegrationTest {
     private StorageLocationRepository storageLocationRepository;
     @MockitoSpyBean
     private HouseholdRepository householdRepository;
+
+    private static JwtRequestPostProcessor user(String name) {
+        String id = UUID.randomUUID().toString();
+        return jwt().jwt(token -> token.subject(id).claim("preferred_username", name));
+    }
 
     @Test
     void twoLocationsWithTheSameNameAtTheSameTime() throws Exception {
@@ -65,12 +65,12 @@ class ConcurrentRequestsIntegrationTest {
         }).when(storageLocationRepository).existsByName(any(), any());
 
         List<Integer> statuses = inParallel(() -> mockMvc.perform(post("/api/storage-locations")
-                        .with(alice)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Keller"}
-                                """))
-                .andReturn().getResponse());
+                .with(alice)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Keller"}
+                    """))
+            .andReturn().getResponse());
 
         assertThat(statuses).containsExactlyInAnyOrder(201, 409);
     }
@@ -86,24 +86,26 @@ class ConcurrentRequestsIntegrationTest {
         }).when(householdRepository).findByMember(any());
 
         List<Integer> statuses = inParallel(() -> mockMvc.perform(post("/api/household")
-                        .with(bob)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "Bobs Haushalt"}
-                                """))
-                .andReturn().getResponse());
+                .with(bob)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "Bobs Haushalt"}
+                    """))
+            .andReturn().getResponse());
 
         assertThat(statuses).containsExactlyInAnyOrder(201, 409);
     }
 
-    /** Sends the request twice at the same time; also checks that a 409 has the generic, safe message. */
+    /**
+     * Sends the request twice at the same time; also checks that a 409 has the generic, safe message.
+     */
     private List<Integer> inParallel(Callable<MockHttpServletResponse> request)
-            throws Exception {
+        throws Exception {
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
             Future<MockHttpServletResponse> first = executor.submit(request);
             Future<MockHttpServletResponse> second = executor.submit(request);
             List<MockHttpServletResponse> responses =
-                    List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS));
+                List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS));
             for (MockHttpServletResponse response : responses) {
                 if (response.getStatus() == 409) {
                     assertThat(response.getContentAsString()).contains(CONFLICT_DETAIL);
@@ -115,16 +117,11 @@ class ConcurrentRequestsIntegrationTest {
 
     private void createHousehold(JwtRequestPostProcessor user) throws Exception {
         mockMvc.perform(post("/api/household")
-                        .with(user)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"name": "WG"}
-                                """))
-                .andExpect(status().isCreated());
-    }
-
-    private static JwtRequestPostProcessor user(String name) {
-        String id = UUID.randomUUID().toString();
-        return jwt().jwt(token -> token.subject(id).claim("preferred_username", name));
+                .with(user)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"name": "WG"}
+                    """))
+            .andExpect(status().isCreated());
     }
 }

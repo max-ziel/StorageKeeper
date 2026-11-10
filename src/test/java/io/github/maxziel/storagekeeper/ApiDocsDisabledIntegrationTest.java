@@ -27,12 +27,12 @@ class ApiDocsDisabledIntegrationTest {
     @Test
     void openApiDocumentIsNotServed() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
-                .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound());
     }
 
     @Test
     void swaggerUiIsNotServed() throws Exception {
         mockMvc.perform(get("/swagger-ui/index.html"))
-                .andExpect(status().isNotFound());
+            .andExpect(status().isNotFound());
     }
 }

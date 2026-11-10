@@ -77,7 +77,7 @@ class StorageLocationServiceTest {
 
         assertThatExceptionOfType(NoHouseholdException.class).isThrownBy(() -> service.listAll());
         assertThatExceptionOfType(NoHouseholdException.class)
-                .isThrownBy(() -> service.add(new LocationName("Keller")));
+            .isThrownBy(() -> service.add(new LocationName("Keller")));
         verifyNoInteractions(repository);
     }
 }

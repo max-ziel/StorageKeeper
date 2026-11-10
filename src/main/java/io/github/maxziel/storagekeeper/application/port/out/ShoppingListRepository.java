@@ -16,12 +16,16 @@ public interface ShoppingListRepository {
 
     ShoppingListEntry save(ShoppingListEntry entry);
 
-    /** Returns the entries for the household's items, oldest first. */
+    /**
+     * Returns the entries for the household's items, oldest first.
+     */
     List<ShoppingListEntry> findAll(HouseholdId householdId);
 
     boolean existsByPantryItemId(PantryItemId pantryItemId);
 
-    /** Removes the entry for this item; does nothing if there is none. */
+    /**
+     * Removes the entry for this item; does nothing if there is none.
+     */
     void deleteByPantryItemId(PantryItemId pantryItemId);
 
     Optional<ShoppingListEntry> findById(ShoppingListEntryId shoppingListEntryId);

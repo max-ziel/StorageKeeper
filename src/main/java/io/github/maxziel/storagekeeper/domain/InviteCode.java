@@ -16,9 +16,13 @@ import java.util.regex.Pattern;
  */
 public record InviteCode(String value) {
 
-    /** Characters per group; a code has two groups. */
+    /**
+     * Characters per group; a code has two groups.
+     */
     public static final int GROUP_SIZE = 4;
-    /** Length of a code including the dash, e.g. 9 for {@code K7M2-QX9P}. */
+    /**
+     * Length of a code including the dash, e.g. 9 for {@code K7M2-QX9P}.
+     */
     public static final int LENGTH = 2 * GROUP_SIZE + 1;
 
     static final String ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -36,7 +40,9 @@ public record InviteCode(String value) {
         }
     }
 
-    /** Creates a new random code. */
+    /**
+     * Creates a new random code.
+     */
     public static InviteCode generate() {
         return generate(RANDOM);
     }

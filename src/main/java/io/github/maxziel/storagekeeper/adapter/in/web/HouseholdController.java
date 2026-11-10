@@ -30,7 +30,9 @@ class HouseholdController {
         this.joinHousehold = joinHousehold;
     }
 
-    /** The household has no id in the URL (see class comment), so the {@code Location} is the singular path. */
+    /**
+     * The household has no id in the URL (see class comment), so the {@code Location} is the singular path.
+     */
     @PostMapping
     ResponseEntity<HouseholdResponse> create(@Valid @RequestBody CreateHouseholdRequest request) {
         HouseholdResponse household = HouseholdResponse.from(createHousehold.create(request.toHouseholdName()));

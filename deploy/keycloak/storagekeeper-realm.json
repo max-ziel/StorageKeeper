@@ -8,7 +8,32 @@
   "passwordPolicy": "length(12) and notUsername",
   "accessTokenLifespan": 300,
   "clients": [
-    
+    {
+      "clientId": "storagekeeper-web",
+      "name": "StorageKeeper (Browser)",
+      "description": "Anmeldung im Browser per Authorization Code mit PKCE, z. B. über die Swagger UI.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:8080/swagger-ui/oauth2-redirect.html"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience storagekeeper-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "storagekeeper-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
     {
       "clientId": "storagekeeper-web",
       "name": "StorageKeeper (Browser)",

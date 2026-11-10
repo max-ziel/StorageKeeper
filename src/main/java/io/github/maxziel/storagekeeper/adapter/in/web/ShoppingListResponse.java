@@ -11,12 +11,12 @@ import java.util.List;
  * @param manualEntries  "Einkaufsliste": entries written by hand
  */
 public record ShoppingListResponse(
-        List<ShoppingListEntryResponse> stockPurchases,
-        List<ManualShoppingListEntryResponse> manualEntries
+    List<ShoppingListEntryResponse> stockPurchases,
+    List<ManualShoppingListEntryResponse> manualEntries
 ) {
     static ShoppingListResponse from(ShoppingList shoppingList) {
         return new ShoppingListResponse(
-                shoppingList.stockPurchases().stream().map(ShoppingListEntryResponse::from).toList(),
-                shoppingList.manualEntries().stream().map(ManualShoppingListEntryResponse::from).toList());
+            shoppingList.stockPurchases().stream().map(ShoppingListEntryResponse::from).toList(),
+            shoppingList.manualEntries().stream().map(ManualShoppingListEntryResponse::from).toList());
     }
 }
