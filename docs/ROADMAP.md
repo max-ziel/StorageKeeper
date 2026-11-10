@@ -22,6 +22,12 @@ und die ArchUnit-Regeln bleiben bestehen.
 | M5 ✅ | API & Sicherheit   | Mehrere Haushalte/Nutzer, jeder sieht nur seinen Vorrat                                                            | springdoc-OpenAPI, Spring Security mit JWT (OAuth2 Resource Server), Autorisierung im Application-Layer                                                  |
 | M6    | Betrieb            | –                                                                                                                  | Docker-Image (Buildpacks via `bootBuildImage`), Actuator-Metriken, strukturiertes Logging, Deployment-Ziel nach Wahl                                     |
 
+### M6 im Detail
+
+- [x] Teil 1: Actuator auf eigenem Port, Health-Probes (`/livez`, `/readyz`), Prometheus-Metriken mit fachlichem
+  Event-Zähler, strukturiertes Logging (ECS) mit Nutzer-ID
+- [ ] Teil 2: Docker-Image per `bootBuildImage`, Deployment
+
 ### Optional danach
 
 - Web-Frontend

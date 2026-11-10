@@ -18,12 +18,49 @@ spring:
           audiences: storagekeeper-api
 
 management:
+  server:
+    # Actuator gets its own port: monitoring reaches it inside the network, but it is never published to the internet.
+    port: ${STORAGEKEEPER_MANAGEMENT_PORT:8081}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      # Only reachable on the management port, so the details (database, disk space) may be shown.
+      show-details: always
+      probes:
+        # /livez and /readyz also on the main port, for load balancers and orchestrators that only see that port.
+        add-additional-paths: true
+      group:
+        readiness:
+          # Not ready without a database; liveness deliberately ignores it, so a database outage causes no restarts.
+          include:
+            - readinessState
+            - db
+          # The probes are also public as /readyz and /livez: show which checks ran, but no details.
+          show-components: always
+          show-details: never
+        liveness:
+          show-details: never
+  info:
+    java:
+      enabled: true
+    os:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      # Buckets for http_server_requests_seconds, so Prometheus can compute percentiles across instances.
+      percentiles-histogram:
+        http.server.requests: true
 
-
+logging:
+  structured:
+    format:
+      # Empty: readable text for development. "ecs", "logstash" or "gelf": one JSON object per line.
+      console: ${STORAGEKEEPER_LOG_FORMAT:}
 
 storagekeeper:
   # Time zone that decides when a day starts, e.g., for "expires today".

@@ -1,8 +1,9 @@
 # Domain-Modell
 
 Dieses Dokument beschreibt, wie die fachlichen Klassen von StorageKeeper aufgebaut sind, welche Regeln sie garantieren und wie ein Request durch die Schichten läuft.  
-Stand: M5 (Haushalte: jeder Nutzer sieht nur den Vorrat seines Haushalts; API nur mit JWT erreichbar;
-Einkaufsliste mit Vorratseinkäufen über Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL).
+Stand: M6 Teil 1 (Betrieb: Health-Probes, Metriken mit Prometheus und strukturiertes Logging; Haushalte: jeder
+Nutzer sieht nur den Vorrat seines Haushalts; API nur mit JWT erreichbar; Einkaufsliste mit Vorratseinkäufen über
+Domain-Events und manuellen Einträgen; gespeichert in PostgreSQL).
 
 ## Grundbegriffe
 
@@ -378,6 +379,8 @@ Events sind einfache `record`s ohne Framework-Typen und implementieren das Marke
 - `PantryItem` sammelt die Events intern; `pullDomainEvents()` gibt sie heraus und leert die Liste,
   damit jedes Event nur einmal verarbeitet wird.
 - Das Wiederherstellen eines Artikels aus der Datenbank (Konstruktor) ist keine Änderung und erzeugt kein Event.
+- Zwei Adapter hören zu: `ShoppingListEventListener` pflegt die Einkaufsliste, `DomainEventMetrics` zählt die Events
+  für die Metriken (siehe „Betrieb“).
 
 ## Einkaufsliste
 
@@ -573,8 +576,8 @@ sequenceDiagram
   `spring.security.oauth2.resourceserver.jwt.issuer-uri` sein) und Audience (`aud` muss `storagekeeper-api`
   enthalten). Die Audience-Prüfung verhindert, dass ein Token, das derselbe Keycloak für eine ganz andere
   Anwendung ausgestellt hat, auch hier funktioniert.
-- **Öffentlich** sind nur `/actuator/health`, `/actuator/info`, `/v3/api-docs` und die Swagger UI; alles andere
-  verlangt ein Token.
+- **Öffentlich** sind nur die Health-Probes `/livez` und `/readyz`, `/v3/api-docs` und die Swagger UI; alles andere
+  auf Port `8080` verlangt ein Token. Actuator läuft auf dem eigenen Port `8081`, siehe „Betrieb“.
 - **Ohne Sitzung:** Jeder Request bringt sein Token mit; der Server merkt sich nichts (`STATELESS`). Weil es
   dadurch auch kein Sitzungs-Cookie gibt, ist CSRF-Schutz unnötig und abgeschaltet.
 - **Wo:** `adapter.in.web.SecurityConfiguration`. Anmeldung gehört zum Web-Adapter; Domain und Application
@@ -663,36 +666,110 @@ springdoc erzeugt aus den Controllern ein OpenAPI-3-Dokument (`/v3/api-docs`) un
 `adapter.in.web.OpenApiConfiguration` ergänzt nur Titel und Beschreibung und meldet das Bearer-Schema an,
 damit die Swagger UI einen „Authorize“-Knopf zeigt. Die Gruppen in der Swagger UI kommen aus `@Tag` an den Controllern.
 
+## Betrieb: Health, Metriken, Logging
+
+Betrieb ist reine Adapter- und Konfigurationssache; Domain und Application wissen davon nichts.
+Es gibt keine neue Tabelle und keine Migration.
+
+```mermaid
+flowchart LR
+    Client([Client]) -->|"Bearer JWT"| P8080
+    LB([Load Balancer /<br/>Orchestrator]) -->|"/livez, /readyz"| P8080
+    Prom([Prometheus]) -->|"/actuator/prometheus<br/>nur im internen Netz"| P8081
+    subgraph App["StorageKeeper"]
+        P8080["Port 8080<br/>REST-API, API-Doku, Probes"]
+        P8081["Port 8081<br/>Actuator, ohne Token"]
+        Registry[(MeterRegistry)]
+        Metrics[DomainEventMetrics]
+        P8081 --> Registry
+        Metrics --> Registry
+    end
+```
+
+### Zwei Ports
+
+| Port   | Kontext                                | Security-Chain                                         |
+|--------|----------------------------------------|--------------------------------------------------------|
+| `8080` | Anwendung (Controller, Probes, Doku)   | `apiSecurity`: JWT, außer Probes und Doku              |
+| `8081` | Actuator (`management.server.port`)    | `managementSecurity`: alles ohne Token (`permitAll`)   |
+
+- Spring Boot startet für `8081` einen eigenen Webserver mit eigenem Kind-Kontext. Die Security-Filterkette
+  gilt auf beiden Ports; `SecurityConfiguration.ManagementSecurity` hat deshalb `@Order(1)` und greift nur für
+  `EndpointRequest.toAnyEndpoint()`. Bei getrenntem Port passt dieser Matcher nur auf Requests an `8081`,
+  `/actuator/prometheus` auf `8080` landet also in `apiSecurity` und ergibt `401`.
+- `@ConditionalOnManagementPort(DIFFERENT)`: Stellt jemand den Management-Port auf `8080`, gibt es die offene
+  Chain gar nicht. Dann sind wie vor M6 nur Health und Info öffentlich, Metriken brauchen ein Token.
+- **Warum nicht alles auf `8080` mit Token?** Prometheus müsste sich dann bei Keycloak Tokens holen. Ein interner
+  Port ohne Anmeldung ist das übliche Muster; er wird im Deployment einfach nicht veröffentlicht.
+
+### Health-Gruppen
+
+| Gruppe      | Prüfungen                  | Auf `8080`  | Details                              |
+|-------------|----------------------------|-------------|--------------------------------------|
+| (gesamt)    | alle (db, diskSpace, ssl …) | –           | ja (nur auf `8081`)                  |
+| `liveness`  | `livenessState`            | `/livez`    | nein                                 |
+| `readiness` | `readinessState`, `db`     | `/readyz`   | nur Status je Prüfung, keine Details |
+
+Die Datenbank gehört bewusst nur zur Readiness: Ist sie weg, kann die App nichts tun und soll keinen Traffic
+bekommen, ein Neustart der App würde aber nichts reparieren.
+
+### Metriken
+
+- Micrometer sammelt die Messwerte in einer `MeterRegistry`; `micrometer-registry-prometheus` stellt sie unter
+  `/actuator/prometheus` bereit. Alle bekommen das Label `application` (`management.metrics.tags`).
+- `http.server.requests` hat zusätzlich Histogramm-Buckets, damit Prometheus Perzentile (z. B. p95) über mehrere
+  Instanzen berechnen kann.
+- `adapter.in.event.DomainEventMetrics` hört auf jedes `DomainEvent` und zählt es im Counter
+  `storagekeeper.domain.events` mit dem Tag `type` (einfacher Klassenname). Weil es nur wenige Event-Typen gibt,
+  bleibt die Zahl der Zeitreihen klein; IDs oder Haushalte gehören deshalb **nicht** in Tags.
+- Gezählt wird mit `@TransactionalEventListener(AFTER_COMMIT)`: Events werden mitten in der Transaktion
+  veröffentlicht, und eine zurückgerollte Änderung soll nicht in der Statistik auftauchen. Die Einkaufsliste
+  dagegen hört weiter mit `@EventListener` in derselben Transaktion, damit Bestand und Liste zusammen gespeichert
+  oder zusammen verworfen werden.
+
+### Logging
+
+- Das Format stellt `logging.structured.format.console` ein (`STORAGEKEEPER_LOG_FORMAT`). Leer = Text,
+  `ecs` = eine JSON-Zeile pro Eintrag im Elastic Common Schema.
+- `adapter.in.web.UserLoggingContextFilter` legt nach der Token-Prüfung die Nutzer-ID als `user.id` in den
+  MDC (Mapped Diagnostic Context) von SLF4J. Alle Logzeilen dieses Requests, egal aus welcher Schicht,
+  enthalten sie dann automatisch. Am Ende des Requests wird der Eintrag wieder entfernt, weil Tomcat den Thread
+  für den nächsten Request wiederverwendet.
+- Der Filter ist absichtlich keine `@Component`: Spring Boot würde jeden Filter-Bean zusätzlich als normalen
+  Servlet-Filter registrieren, dann liefe er ein zweites Mal vor der Security und fände dort noch keinen Nutzer.
+- Die Application loggt fachlich wichtige Vorgänge mit SLF4J, z. B. `HouseholdService` „Household … founded“
+  und Beitritte. SLF4J ist nur eine Logging-Schnittstelle, kein Framework; die Domain loggt nicht.
+
 ## Schichten und Abhängigkeiten
 
 ```mermaid
 flowchart LR
-    Client([HTTP-Client]) --> Web
-    subgraph SG_WEB["adapter.in.web"]
-        Web[PantryItemController]
-    end
-    subgraph SG_APP["application"]
-        PortIn[[Use-Case-Interfaces<br/>port.in]]
-        Service[PantryItemService]
-        PortOut[[PantryItemRepository<br/>port.out]]
-    end
-    subgraph SG_DOM["domain"]
-        Model[PantryItem und Value Objects]
-    end
-    subgraph SG_PERS["adapter.out.persistence"]
-        Repo[JpaPantryItemRepository]
-        Entity[PantryItemJpaEntity]
-        SpringData[[SpringDataPantryItemRepository]]
-    end
-    DB[(PostgreSQL)]
-    Web --> PortIn
-    Service -. implementiert .-> PortIn
-    Service --> Model
-    Service --> PortOut
-    Repo -. implementiert .-> PortOut
-    Repo --> SpringData
-    Repo --> Entity
-    SpringData --> DB
+  Client([HTTP-Client]) --> Web
+  subgraph SG_WEB["adapter.in.web"]
+    Web[PantryItemController]
+  end
+  subgraph SG_APP["application"]
+    PortIn[[Use-Case-Interfaces<br/>port.in]]
+    Service[PantryItemService]
+    PortOut[[PantryItemRepository<br/>port.out]]
+  end
+  subgraph SG_DOM["domain"]
+    Model[PantryItem und Value Objects]
+  end
+  subgraph SG_PERS["adapter.out.persistence"]
+    Repo[JpaPantryItemRepository]
+    Entity[PantryItemJpaEntity]
+    SpringData[[SpringDataPantryItemRepository]]
+  end
+  DB[(PostgreSQL)]
+  Web --> PortIn
+  Service -. implementiert .-> PortIn
+  Service --> Model
+  Service --> PortOut
+  Repo -. implementiert .-> PortOut
+  Repo --> SpringData
+  Repo --> Entity
+  SpringData --> DB
 ```
 
 - Abhängigkeiten zeigen immer nach innen: Adapter → Application → Domain.
@@ -706,22 +783,22 @@ Beispiel: Menge ändern.
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant W as PantryItemController
-    participant S as PantryItemService
-    participant R as PantryItemRepository
-    participant P as PantryItem
+  participant C as Client
+  participant W as PantryItemController
+  participant S as PantryItemService
+  participant R as PantryItemRepository
+  participant P as PantryItem
 
-    C->>W: PATCH /api/pantry-items/{id}/quantity {"amount": 0.5}
-    W->>W: @Valid prüft ChangeQuantityRequest
-    W->>S: changeQuantity(PantryItemId, 0.5)
-    S->>R: findById(id)
-    R-->>S: Optional<PantryItem>
-    S->>P: changeQuantity(0.5)
-    P->>P: Quantity prüft amount ≥ 0
-    S->>R: save(item)
-    S-->>W: PantryItem
-    W-->>C: 200 PantryItemResponse (JSON)
+  C->>W: PATCH /api/pantry-items/{id}/quantity {"amount": 0.5}
+  W->>W: @Valid prüft ChangeQuantityRequest
+  W->>S: changeQuantity(PantryItemId, 0.5)
+  S->>R: findById(id)
+  R-->>S: Optional<PantryItem>
+  S->>P: changeQuantity(0.5)
+  P->>P: Quantity prüft amount ≥ 0
+  S->>R: save(item)
+  S-->>W: PantryItem
+  W-->>C: 200 PantryItemResponse (JSON)
 ```
 
 ## Abbildung REST ↔ Domain
