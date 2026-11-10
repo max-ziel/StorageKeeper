@@ -1,216 +1,94 @@
-# Audit-Report StorageKeeper
+# Audit-Report StorageKeeper – offene Punkte
 
-Stand: 2026-11-10, Commit `12897b7` (Branch `main` = `claude/tender-carson-7e05u0`). Reines Lese-Audit, am Code wurde nichts geändert.
+Stand: 2026-11-10, `main` @ `135d5f1` (M7 per Squash-Merge `9c22ced`, danach sechs Dependabot-Updates: Spring Boot 4.1.2, Gradle 9.9.0,
+Keycloak 26.7, Prometheus v3.16.0, `gradle/actions` v6, Qodana-Action 2026.2).
+
+Dieser Bericht enthält **nur noch offene Punkte**. Alles, was in den Audits zu M6 und M7 gefunden und inzwischen behoben wurde, ist entfernt;
+die vollständigen früheren Fassungen stehen in der Git-Historie dieser Datei und von `docs/AUDIT_REPORT_M7.md`.
+Die Befund-IDs der früheren Berichte bleiben erhalten, neue Befunde haben das Präfix `N-`.
 
 ## 1. Zusammenfassung
 
-Insgesamt ein **überdurchschnittlich sauberes Projekt**: konsequente Ports-&-Adapters-Struktur mit ArchUnit-Prüfung, reiches Domain-Modell mit Value Objects,
-getrennte JPA-Entities, Flyway-Migrationen mit Migrationstest, 214 grüne Tests mit 98,2 % Zeilen- und 81,5 % Branch-Abdeckung, sehr ausführliche Doku.
-Die Schwächen liegen vor allem bei **Doku, die dem Code hinterherläuft**, beim **Deployment-Default** und bei **Randfällen der Fehlerbehandlung**.
+Das Projekt ist in gutem Zustand: Build, alle Tests, Coverage-Gate und ArchUnit sind grün, die CI auf `main` ist grün und veröffentlicht das Image.
+**Kein offener Befund hat den Schweregrad Kritisch oder Hoch.** Offen sind der Abschluss des Releases 0.7.0, Repo-Einstellungen,
+Pflegethemen (Formatter, Qodana, Lockfile/Scan) und einige Konsistenzpunkte.
 
-**Top 5:**
-1. **S-01 (Hoch):** `deploy/compose.yaml` importiert den Dev-Realm in die Produktion – mit den Testnutzern `alice/alice`, `bob/bob`, `carol/carol` und Password-Grant.
-2. **D-01 / A-01 (Hoch):** `DOMAIN_MODEL.md` behauptet, die Application hänge „nur vom JDK, nicht von Spring“ ab – sie nutzt `@Service`, `@Transactional`, `@Component`; ArchUnit prüft das nicht.
-3. **C-01 (Mittel, unsicher):** Check-then-act ohne Behandlung von `DataIntegrityViolationException` → bei parallelen Requests `500` statt `409`.
-4. **D-02 / D-05 / D-06 (Hoch/Mittel):** Falsche Javadoc/Doku: `ExpiringPantryItemResponse` hat nicht „dieselben Felder“, Javadoc von `AddManualShoppingListEntryRequest` und `PantryItemFellBelowMinimum` beschreibt das Falsche.
-5. **R-03 / R-04 (Mittel):** Keine Releases/Tags, Version seit M0 `0.0.1-SNAPSHOT`; CI läuft bei jedem PR doppelt, Qodana mit JDK 21 statt 25.
+## 2. Was ausgeführt wurde (Stand `135d5f1`)
 
-**Bereits gut:** klare Schichtung, Domain frei von Frameworks (geprüft), Autorisierung im Application-Layer mit 404 statt 403 für fremde IDs,
-DB-Constraints als zweite Verteidigungslinie (FK `(storage_location_id, household_id)`), testbare Zeit über `Clock`, ProblemDetail für alle Fehler inkl. 401,
-getrennter Actuator-Port, strukturierte Logs, Buildpacks-Image, keine Secrets im Repo oder in der Historie gefunden.
-
-## 2. Was ausgeführt wurde
-
-| Befehl / Prüfung | Ergebnis |
+| Prüfung | Ergebnis |
 |---|---|
-| `./gradlew build` (erster Versuch) | **Fehlgeschlagen**: Toolchain Java 25 nicht lokal vorhanden, Foojay-Download vom Netzwerk-Proxy blockiert (`403`). Umgebungsproblem, kein Projektfehler. |
-| `apt-get install openjdk-25-jdk-headless` (nur im Container) | OpenJDK 25.0.5 installiert |
-| `./gradlew build -Dorg.gradle.java.installations.paths=…` (2. Versuch) | Fehlgeschlagen: Maven Central `429 Too Many Requests` (transient) |
-| 3. Versuch, ohne Docker-Daemon | Kompiliert, `bootJar` ok; **213 Tests, 60 rot** – exakt alle Testcontainers-Tests (kein Docker). Belegt T-04. |
-| `dockerd` gestartet, `docker pull postgres:18-alpine` (nach `429`-Retries) | ok |
-| `./gradlew clean build jacocoTestReport` | **BUILD SUCCESSFUL in 57 s, 214 Tests, 0 Fehler, 0 übersprungen.** JaCoCo: Instruktionen 98,0 %, Branches 81,5 %, Zeilen 98,2 %, Methoden 98,0 %, Klassen 100 % |
-| `compileJava compileTestJava` mit `-Xlint:all` (per Init-Skript im Scratchpad, Repo unverändert) | 14 Warnungen Main, 1 Test (siehe B-04, B-05) |
-| `java -jar build/libs/storagekeeper-0.0.1-SNAPSHOT.jar` | Startet (`Starting StorageKeeperApplication v0.0.1-SNAPSHOT using Java 25`) – package-private `static void main` funktioniert |
-| `docker compose config -q` für `compose.yaml` und `deploy/compose.yaml` | beide gültig; `deploy` bricht ohne Passwörter wie dokumentiert ab |
-| Secret-Scan Arbeitsbaum + `git log --all -p` (Regex auf key/secret/token/password) | nur Dev-/Test-Werte (`storagekeeper`, `ops-test-token`, Realm-Testnutzer) |
-| GitHub-Metadaten (Search-API), Releases, Actions-Runs (GitHub MCP) | Beschreibung leer, Topics `household`, `organisation`, Lizenz MIT, 0 Releases, 0 Tags, letzte CI- und Qodana-Runs auf `main` grün |
+| `./gradlew clean build jacocoTestReport` (JDK 25, Docker) | BUILD SUCCESSFUL in 59 s; **241 Tests, 0 Fehler, 0 übersprungen**; 98,3 % Zeilen, 84,0 % Branches. Erster Versuch scheiterte an `429 Too Many Requests` von Maven Central (Umgebung, kein Projektfehler) |
+| `--warning-mode all` | eine Deprecation unter Gradle 9.9, siehe N-10 |
+| GitHub Actions auf `main` | alle CI-Runs seit dem Merge grün; Job `image` in Run 42826845887 erfolgreich, Veröffentlichung nach GHCR funktioniert |
+| Dev- und Produktions-Realm in **Keycloak 26.7** importiert | beide ok; `storagekeeper-web` vorhanden, Login-Endpunkt mit PKCE antwortet `200` |
+| `dependencyInsight jackson-databind` | springdoc 3.2.0 fordert weiterhin Jackson 2.21.7, der Override auf 2.21.8 in `build.gradle.kts` ist also weiter nötig |
+| `git ls-remote --tags origin` | **keine Tags** |
 
-**Nicht geprüft:**
-- `./gradlew bootRun` mit Keycloak und `deploy/compose.yaml up` (Keycloak-/App-Image nicht gezogen; Docker Hub rate-limitiert) → README-Schritte „Anmeldung“, „Deployment“ **ungeprüft** (nur statisch gegen Code/Config verglichen).
-- `./gradlew bootBuildImage` (braucht Buildpack-Images aus dem Netz) → **ungeprüft**; laut Actions-Historie läuft der `image`-Job auf `main` grün.
-- Schwachstellen-Scan der Abhängigkeiten: kein Tool konfiguriert (kein OWASP Dependency-Check, kein Dependabot) → **ungeprüft**.
-- Qodana-Ergebnisse: nur in Qodana Cloud einsehbar → **ungeprüft**.
-- Repo-Einstellungen (Branch Protection, Secret Scanning, Package-Sichtbarkeit von `ghcr.io/max-ziel/storagekeeper`) → manuell zu prüfen, siehe Kategorie 2.
+Nicht geprüft: Browser-Login in der Swagger UI, Upgrade eines M6-Volumes (siehe N-05), Repo-Einstellungen (nur manuell möglich), Schwachstellen-Scan der Abhängigkeiten (kein Tool konfiguriert).
 
-## 3. Befunde je Kategorie
+## 3. Offene Befunde
 
 Schweregrade: **Kritisch** (Build/Sicherheit/Datenverlust), **Hoch** (falsches Verhalten, irreführende Doku), **Mittel** (Wartbarkeit, Inkonsistenz), **Niedrig** (Stil, Kosmetik).
 Aufwand: S < 1 h, M ≤ 1 Tag, L > 1 Tag.
 
-### 3.1 README und Projektdokumentation
-
-| ID | Schweregrad | Ort (Datei:Zeile) | Befund | Empfohlener Fix | Aufwand |
-|---|---|---|---|---|---|
-| D-01 | Hoch | `docs/DOMAIN_MODEL.md:513-514` | „Die Application hängt weiterhin nur vom JDK ab, nicht von Spring.“ Falsch: `HouseholdService.java:17-18` (`@Service`, `@Transactional`), `CurrentHousehold.java:7` (`@Component`), ebenso alle Services. | Aussage korrigieren („nur von Spring-Annotationen für Wiring/Transaktionen“) oder A-01 umsetzen. | S |
-| D-02 | Hoch | `docs/DOMAIN_MODEL.md:862-863` | „`ExpiringPantryItemResponse` enthält dieselben Felder wie `PantryItemResponse` plus …“ – es fehlen `minimumAmount` und `belowMinimum` (`ExpiringPantryItemResponse.java:16-25` vs. `PantryItemResponse.java:17-18`). | Doku korrigieren oder die beiden Felder ergänzen (API-Entscheidung). | S |
-| D-03 | Mittel | `docs/DOMAIN_MODEL.md:812-835` | Diagramm „Ablauf eines Requests“ zeigt den Stand M2: ohne `CurrentHousehold.require()`, `belongsTo`, Event-Publishing. Widerspricht den Diagrammen weiter oben. | Diagramm aktualisieren oder durch Verweis auf „Wo die Prüfung stattfindet“ ersetzen. | S |
-| D-04 | Mittel | `docs/DOMAIN_MODEL.md:210, 232, 429`; `PantryItemRepository.java:17` | Veraltete Zeitbezüge: „später aus der Datenbank“, „sobald es weitere gibt (z. B. Lagerorte in M3)“, „In M5/M6 können weitere Reaktionen …“, „in M1 in memory, from M2 on with JPA“. | Auf heutigen Stand formulieren. | S |
-| D-05 | Mittel | `adapter/in/web/AddManualShoppingListEntryRequest.java:13-16` | Javadoc ist von `CheckOffStockPurchaseRequest` kopiert: nennt Endpunkt `…/check-off` und `@param amount the amount bought`. Tatsächlich `POST /api/shopping-list/manual-entries`. | Javadoc korrigieren. | S |
-| D-06 | Mittel | `domain/PantryItemFellBelowMinimum.java:4` | Javadoc „has **reached** its minimum stock; before the change it was not“ – beschreibt das Gegenteil (das ist `PantryItemReachedMinimum`). | „fell below its minimum stock; before it was not“. | S |
-| D-07 | Mittel | `README.md:302-317` | Paketstruktur unvollständig: Paket `config` (`ClockConfiguration`) und `application.port` (`PageQuery`, `ResultPage`) fehlen. | Baum ergänzen. | S |
-| D-08 | Mittel | `README.md` (gesamt) | Fehlende Abschnitte: Lizenz (MIT-`LICENSE` existiert, wird nicht erwähnt), Mitwirken/Kontakt, eigener Abschnitt „Tests“ (Teststrategie nur als Kommentar in Zeile 16), Changelog/Versionen. | Kurze Abschnitte „Tests“, „Lizenz“, „Mitwirken“ ergänzen. | S |
-| D-09 | Niedrig | `README.md:11` | „ein laufendes Docker (für PostgreSQL)“ – `bootRun` startet auch Keycloak, Tests brauchen Docker zwingend (siehe T-04). | „für PostgreSQL, Keycloak und die Tests“. | S |
-| D-10 | Niedrig | `CheckOffStockPurchaseUseCase.java:9` („Checks iff“), `PantryItemController.java:60` („nema“), `PantryItemSpecifications.java:9` („arte“), `PantryItem.java:58` („hte“), `Quantity.java:23` („give“), `SecurityConfiguration.java:53` („standard-bearer“), `ShoppingListEntryId.java:8` (leeres `@param value`), `ChangeMinimumAmountRequest.java:9` (Satz ohne Trenner), `ManualShoppingListEntryId.java:7` | Tippfehler/unvollständige Javadoc. | Korrigieren. | S |
-| D-11 | Niedrig | `src/main/resources/db/migration/V2__create_storage_location.sql:10` | Kommentar verweist auf `StorageLocationId.Default`, das es nicht mehr gibt (und nie so hieß: `DEFAULT`). | **Migration nicht ändern** (Flyway-Checksumme!). Nur in `DOMAIN_MODEL.md` den historischen Kontext belassen. Kein Fix nötig. | – |
-| D-12 | Niedrig | `StorageKeeperApplication.java:6`, `config/ClockConfiguration.java:10`, Getter in `domain/*` | Fehlende Javadoc an einigen öffentlichen Typen/Methoden; die meisten öffentlichen Schnittstellen (Ports, Domain) sind dagegen gut dokumentiert. | Klassen-Javadoc für die beiden Klassen ergänzen. | S |
-
-### 3.2 GitHub-Repository-Metadaten
-
 | ID | Schweregrad | Ort | Befund | Empfohlener Fix | Aufwand |
 |---|---|---|---|---|---|
-| R-01 | Mittel | GitHub „About“ | `description: null`, `homepage: ""`, Topics nur `household`, `organisation` – kein Bezug zu README („Pantry-App – Java 25, Spring Boot 4 …“). | Beschreibung aus README-Zeile 4 übernehmen; Topics z. B. `pantry`, `spring-boot`, `java`, `hexagonal-architecture`, `keycloak`. | S |
-| R-02 | Mittel | Repo-Root, `.github/` | Es fehlen `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, Issue-/PR-Templates, `CODEOWNERS`, `dependabot.yml`. `.github/` enthält nur `workflows/`. | Mindestens `SECURITY.md` und `dependabot.yml` (Gradle + GitHub Actions); Rest je nach Anspruch. | S–M |
-| R-03 | Mittel | `build.gradle.kts:10`; GitHub Releases/Tags | Version seit M0 `0.0.1-SNAPSHOT`, obwohl M0–M6 abgeschlossen; 0 Tags, 0 Releases, kein `CHANGELOG`. Der CI-Image-Tag „Version“ (`:0.0.1-SNAPSHOT`) wird bei jedem Push auf `main` überschrieben und ist damit wertlos. | Semver einführen (z. B. `0.6.0` für M6), Tags pro Milestone, Release-Notes/CHANGELOG. | S |
-| R-04 | Mittel | `.github/workflows/ci.yml:3-5` | `on: push` + `pull_request` ohne Branch-Filter → jeder PR-Commit läuft doppelt (belegt: Runs #72 push und #74 pull_request für SHA `5a39950`). | `push` auf `main` beschränken, PRs über `pull_request`. | S |
-| R-05 | Mittel | `.github/workflows/qodana_code_quality.yml:22-26, 14, 37` | JDK 21 statt 25 (Toolchain wird nur dank Foojay nachgeladen); `permissions: contents: write` breiter als nötig; `pr-mode: false`, obwohl Zeile 19-20 einen PR-Checkout für PR-Analyse vorbereiten. Tests laufen zusätzlich zur CI noch einmal komplett. | JDK 25; `contents: read`; Coverage-Artefakt aus CI wiederverwenden oder Qodana in CI integrieren. | S |
-| R-06 | Niedrig | `.github/workflows/ci.yml:28` | Build-Job führt `test jacocoTestReport` statt `build` aus → `bootJar`/`assemble` wird bei PRs nicht geprüft; keine Coverage-Schwelle. | `./gradlew build jacocoTestReport`. | S |
-| R-07 | Niedrig | `README.md:2` | Nur Qodana-Badge, kein CI-Badge. | CI-Badge ergänzen. | S |
-| R-08 | Niedrig | `.gitignore`; Git-Historie | `.qodana/` (wird in CI angelegt), `*.log`, Root-`.env` nicht ignoriert. Historie enthält das gelöschte `graphify-out/` (~1,6 MB Blobs, Commits `a6df341`, `32c7a61`, `4f0909b`) sowie doppelte Commits („M3 (1/3)“, „M4 (1/2)“ je zweimal). | `.gitignore` ergänzen. Historie nicht umschreiben (öffentliches Repo), nur zur Kenntnis. | S |
-| R-09 | – | Repo-Einstellungen (manuell prüfen) | Nicht per API prüfbar: Branch Protection für `main` (Pflicht-Checks CI), Secret Scanning/Push Protection, Dependabot Alerts, Sichtbarkeit des GHCR-Pakets (README:263-264 verlangt „public“), Wiki aktiviert, aber leer? | In den Repo-Settings kontrollieren. | S |
+| N-11 | Mittel | Git-Tags; `build.gradle.kts:9`; `README.md:303-305` | Release 0.7.0 ist nicht abgeschlossen: M7 ist auf `main`, aber `v0.7.0` fehlt. Damit gibt es noch kein Image `:0.7.0`, und die README-Empfehlung „im Betrieb `STORAGEKEEPER_VERSION` auf eine Version setzen“ ist nicht umsetzbar. Die Version steht noch auf `0.7.0`; laut README soll sie zu Beginn von M8 auf `0.8.0-SNAPSHOT`. | `git tag v0.7.0 135d5f1` (oder `9c22ced`) und pushen, im Actions-Log den Job `image` mit Tag `0.7.0` prüfen; danach auf dem M8-Branch `0.8.0-SNAPSHOT`. | S |
+| R-09 | Mittel | Repo-Einstellungen (manuell) | Nicht per API prüfbar: **Private vulnerability reporting** (sonst läuft der Meldeweg aus `SECURITY.md` ins Leere), **Dependabot alerts / security updates**, **Branch Protection** für `main` mit Pflicht-Check `CI / build`, Sichtbarkeit des GHCR-Pakets (README verlangt „public“). | In *Settings → Code security* und *Settings → Branches* aktivieren. | S |
+| R-05 | Mittel | `.github/workflows/qodana_code_quality.yml:29` | Qodana lässt alle 241 Tests (mit Testcontainers) ein zweites Mal laufen, nur um Coverage zu erzeugen, die der CI-Job schon hat. Doppelte Laufzeit und doppelte Docker-Hub-/Maven-Zugriffe. | Qodana als Job in `ci.yml` nach `build` und das Coverage-Artefakt per `actions/download-artifact` übernehmen, oder Qodana ohne Coverage laufen lassen. | S |
+| B-03 | Mittel | `build.gradle.kts` | Kein Dependency-Locking und kein Schwachstellen-Scan im Build. Dependabot schlägt Versionen vor, meldet aber nur über die (ungeprüften) Alerts, ob eine *genutzte* Version verwundbar ist. | GitHub *Dependency Review* in PRs und Alerts aktivieren (R-09); optional `dependencyLocking { lockAllConfigurations() }` und OWASP Dependency-Check. | M |
+| K-01 | Mittel | `HouseholdController.java:18`, `PantryItemController.java:24` u. a. (`@Tag`), `OpenApiConfiguration` vs. `application/*Exception.java` | Sprachmix in der API: OpenAPI-Tags und -Beschreibung Deutsch, Fehlermeldungen im `detail` Englisch („Create or join a household first.“); Default-Lagerort „Vorrat“ Deutsch. | Zielsprache für alles, was ein Client sieht, festlegen (vermutlich Deutsch) und vereinheitlichen; Tests, die auf Texte prüfen, anpassen. | M |
+| R-02 | Niedrig | `.github/` | Es fehlen Issue- und PR-Vorlagen, `CODEOWNERS` und `CODE_OF_CONDUCT.md` (`SECURITY.md`, Mitwirken-Abschnitt und Dependabot sind vorhanden). Für ein Ein-Personen-Projekt optional. | Mindestens eine PR-Vorlage mit Checkliste (CI grün, CHANGELOG, Doku) und `CODEOWNERS`. | S |
+| C-06 / N-06 | Niedrig | 11 Dateien: `adapter/in/web/{ApiExceptionHandler,HouseholdController,PantryItemController,ShoppingListController,StorageLocationController}.java`, `adapter/out/persistence/{HouseholdJpaEntity,ManualShoppingListEntryJpaEntity,PantryItemJpaEntity}.java`, `application/{HouseholdService,PantryItemService,ShoppingListService}.java` | Kein Formatter mit CI-Prüfung, nur `.editorconfig`. Folge: Wildcard-Imports in 11 Dateien (vor M7: 2), Formatierung hängt von der IDE ab (in M7 führte das zu Commits, die überwiegend Einrückung ändern). | Spotless (z. B. Palantir Java Format) einführen, einmal `spotlessApply` als eigener Commit, `spotlessCheck` in `check`. | M |
+| N-10 | Niedrig | `build.gradle.kts:94` | `val unitTest by tasks.registering(Test::class)` ist seit Gradle 9.6 deprecated und wird in Gradle 10 entfernt. Ein Dependabot-Update auf Gradle 10 würde den Build brechen. | `val unitTest = tasks.register<Test>("unitTest") { … }`. | S |
+| K-03 | Niedrig | `application/port/out/ManualShoppingListRepository.java` vs. `adapter/out/persistence/SpringDataManualShoppingListEntryRepository.java`; `ShoppingListRepository` (für `ShoppingListEntry`) | Uneinheitliche Benennung der Einkaufslisten-Repositories (mal mit, mal ohne `Entry`). | Einheitlich `…ShoppingListEntryRepository`. | S |
+| C-09 | Niedrig | alle `Jpa*Repository.save` | Entities haben vorab vergebene UUIDs und kein `@Version`/`Persistable`; Spring Data macht deshalb vor jedem Insert ein `merge` mit zusätzlichem `SELECT`. Nicht gemessen; bei der Datenmenge eines Haushalts unkritisch. | `Persistable<UUID>` mit `isNew()` oder eine `@Version`-Spalte (Flyway-Migration). | M |
+| S-06 | Niedrig | `deploy/compose.yaml:66` (`KC_HTTP_ENABLED`) | Der Stack spricht nur HTTP; TLS ist dokumentiert (README „HTTPS“), aber nicht mitgeliefert. Der Produktions-Realm verlangt `sslRequired: external`, d. h. ohne Proxy funktioniert der Login nur über `localhost`. | Optionales Profil `tls` mit Caddy (automatische Zertifikate) in `deploy/compose.yaml`. | M |
+| N-05 | Niedrig (ungeprüft) | `README.md:353-373` | Die Upgrade-Anleitung für Installationen vor 0.7.0 wurde laut Commit gegen ein M6-Volume getestet (Keycloak 26.4), von mir nicht nachgestellt. Mit dem Dependabot-Update springt ein Upgrade jetzt zusätzlich von Keycloak 26.4 auf 26.7 (Keycloak migriert seine DB dabei selbst); Zeile 367 nennt noch 26.4. | Einmal mit einem M6-Volume und Keycloak 26.7 durchspielen, Zeile 367 anpassen. | S |
+| B-05 | Niedrig | 8 Exception-Klassen in `application/` und `domain/DomainValidationException.java` | `javac -Xlint:all` meldet nur noch 8 × `[serial]`. Unkritisch, die Exceptions werden nicht serialisiert. | Optional `@Serial private static final long serialVersionUID = 1L;` oder `-Xlint:-serial`. | S |
 
-### 3.3 Imports, Abhängigkeiten und Build
+### Bewusst akzeptiert (kein Handlungsbedarf)
 
-| ID | Schweregrad | Ort (Datei:Zeile) | Befund | Empfohlener Fix | Aufwand |
-|---|---|---|---|---|---|
-| B-01 | Mittel | `build.gradle.kts:6` | Plugin `io.swagger.core.v3.swagger-gradle-plugin` wird angewendet, aber nirgends konfiguriert (keine `resolve`-Task-Konfiguration); OpenAPI kommt zur Laufzeit von springdoc. Tote Build-Abhängigkeit. | Plugin entfernen. | S |
-| B-02 | Mittel (unsicher) | `build.gradle.kts:72` | `extra["jackson-2-bom.version"] = "2.21.8"` ohne Kommentar, warum (vermutlich CVE-Fix für eine transitive Jackson-2-Abhängigkeit). Ob Jackson 2 überhaupt noch transitiv genutzt wird, ist ungeklärt (Boot 4 nutzt Jackson 3). Zur Klärung: `./gradlew dependencyInsight --dependency com.fasterxml.jackson.core`. | Begründung als Kommentar ergänzen oder Override entfernen. | S |
-| B-03 | Mittel | `build.gradle.kts` | Kein Dependency-Locking (`gradle.lockfile`), kein automatisches Update (Dependabot/Renovate), kein Schwachstellen-Scan. Plugin-Versionen sind fest, Bibliotheken über die Boot-BOM – reproduzierbar, solange die BOM gleich bleibt. | Dependabot (R-02) + optional `dependencyLocking { lockAllConfigurations() }`; OWASP Dependency-Check oder GitHub Dependency Review. | M |
-| B-04 | Mittel | `adapter/out/persistence/ShoppingListJpaEntity.java:17` | Datei heißt `ShoppingListJpaEntity.java`, enthält aber die Klasse `ShoppingListEntryJpaEntity`. `javac -Xlint` meldet 5× `[auxiliaryclass] … should not be accessed from outside its own source file` (`JpaShoppingListRepository.java:26,33,50`, `SpringDataShoppingListEntryRepository.java:11,23`). | Datei in `ShoppingListEntryJpaEntity.java` umbenennen. | S |
-| B-05 | Niedrig | `domain/Household.java:31`; `UserLoggingContextFilter.java:40`; 7 Exception-Klassen in `application/`; `HouseholdServiceTest.java:65` | Weitere `-Xlint:all`-Warnungen: `[this-escape]` (Konstruktor ruft überschreibbares `join` auf, Klasse nicht `final`), `[try]` (gewollt), `[serial]` ×7, `[unchecked]` im Test. | `Household` `final` machen oder privaten Helfer nutzen; `[try]` mit `@SuppressWarnings("try")`; Rest optional. | S |
-| B-06 | Niedrig | `PantryItemController.java:4`, `PantryItemService.java:5`, `PantryItemControllerTest.java:7`, `ShoppingListControllerTest.java:4` | Wildcard-Imports `port.in.*`, sonst überall explizite Imports. | Einheitlich explizit. | S |
-| B-07 | Niedrig | `settings.gradle.kts:2`, `build.gradle.kts:13-17` | Build hängt an Foojay-Auto-Provisioning; in Netzen ohne Zugriff auf foojay.io schlägt er fehl (hier verifiziert). | README-Hinweis: JDK 25 lokal installieren oder `-Dorg.gradle.java.installations.paths=…`. | S |
+| ID | Punkt | Begründung |
+|---|---|---|
+| S-04 | Actuator-Port `8081` ohne Anmeldung | nur im internen Netz, in README und `SECURITY.md` dokumentiert |
+| A-04 | Default-Lagerort „Vorrat“ in der Domain | deutschsprachige App; wird mit K-01 ggf. neu bewertet |
+| C-08 | `ShoppingListService.checkOff` lädt den Artikel zweimal | vernachlässigbar, hält die Autorisierung an einer Stelle |
+| D-11 | Kommentar `StorageLocationId.Default` in `V2__create_storage_location.sql` | ausgeführte Migrationen werden nicht geändert (Flyway-Checksumme) |
 
-Keine fehlenden oder zirkulären Imports, keine Referenzen auf nicht existierende Klassen/Ressourcen gefunden (Build und `ddl-auto: validate` laufen). Konfigurationsschlüssel `storagekeeper.time-zone` existiert (`application.yaml`). Kein toter Produktivcode gefunden (alle Klassen von Tests erreicht, Klassenabdeckung 100 %).
+## 4. Reihenfolge der Änderungen
 
-### 3.4 Code-Qualität (Clean Code)
+Jeder Schritt ist ein eigener, kleiner Commit bzw. PR mit grüner CI. Die Reihenfolge folgt zwei Regeln: erst das, was andere Schritte voraussetzt
+oder absichert, und **den Formatter-Lauf allein und vor allen Code-Änderungen**, damit spätere Diffs lesbar bleiben.
 
-| ID | Schweregrad | Ort (Datei:Zeile) | Befund | Empfohlener Fix | Aufwand |
-|---|---|---|---|---|---|
-| C-01 | Mittel (unsicher, nicht reproduziert) | `StorageLocationService.java:28-35`, `HouseholdService.java:40-51, 60-74, 83-89`, `ApiExceptionHandler.java` | Check-then-act: Name-/Mitgliedschafts-/Code-Prüfung und Insert sind nicht atomar (`StorageLocationService.add` hat nicht einmal `@Transactional`). Bei parallelen Requests greifen die DB-Constraints (`uq_storage_location_household_name`, PK `household_member.user_id`, `UNIQUE invite_code`); für `DataIntegrityViolationException` gibt es keinen Handler → `500` statt `409`. Zur Bestätigung: Test mit zwei parallelen `POST /api/storage-locations`. | Handler für `DataIntegrityViolationException` → `409`, oder Exception im Repository-Adapter in die passende Application-Exception übersetzen; `@Transactional` ergänzen. | M |
-| C-02 | Mittel | `ApiExceptionHandler.java:37-40` | Jede `IllegalArgumentException` wird zu `400` mit Original-Message – auch solche aus Bibliotheken oder Programmierfehlern; interne Texte gelangen an den Client. `IllegalStateException` (z. B. `PantryItemService.java:134`, `Household.java:47`) wird gar nicht behandelt → generische `500`. | Eigene `DomainValidationException` (oder Value-Object-spezifische) einführen und nur diese auf `400` mappen. | M |
-| C-03 | Mittel | `domain/ManualShoppingListEntry.java:32-40, 80` | `addedAt` wird nicht auf `null` geprüft (anders als `ShoppingListEntry.java:20`); ein `null` fiele erst als DB-Fehler auf. Mengen-Prüfung vor den Null-Checks; `equals` per `getClass()` statt `instanceof` wie in allen anderen Entities. | `Objects.requireNonNull(addedAt, …)`; Reihenfolge und `equals` angleichen. | S |
-| C-04 | Mittel | `StorageLocationService.java:28-40`; `PantryItemService.java:76-91`; `JpaPantryItemRepository.java:49`; `JpaShoppingListRepository.java:43` | Uneinheitliche Transaktionsgrenzen: `StorageLocationService` ganz ohne `@Transactional`, Lesemethoden in `PantryItemService` ohne `readOnly`, während `HouseholdService.getCurrent` und `ShoppingListService.getShoppingList` `readOnly` haben; zusätzlich vereinzelt `@Transactional` auf Adapter-Methoden. | Regel festlegen: Transaktionen nur an Use-Case-Methoden, Lesen mit `readOnly = true`. | S |
-| C-05 | Niedrig | `ManualShoppingListEntryJpaEntity.java:31` (`length = 100`), `HouseholdJpaEntity.java:38` (`length = 9`), `InviteCode.java:40-41` (`8`, `4`) | Magic Numbers; an anderen Stellen wird `ItemName.MAX_LENGTH` verwendet (`PantryItemJpaEntity.java:25`). | Konstanten nutzen bzw. `InviteCode.LENGTH`/`GROUP_SIZE` einführen. | S |
-| C-06 | Niedrig | `ItemName.java:18`, `Quantity.java:18,26`, `ShoppingListEntryId.java:22`, `PantryItemFilter.java:15`, `ExpiringPantryItemResponse.java:23,29`, `JpaPantryItemRepository.java:35,56`, `JpaStorageLocationRepository.java:27`, `PantryItemJpaEntity.java:43`, `PageQuery.java:15`, `ResultPage.java:20`, `AddManualShoppingListEntryRequest.java:22` | Formatierungsfehler (doppelte Leerzeichen, `page < 0 )`, `size -1`, Leerzeile in Record-Komponenten, doppelte Leerzeilen). Kein Formatter/Linter konfiguriert (kein Spotless, Checkstyle, `.editorconfig`); nur Qodana in der Cloud. | Spotless (z. B. Palantir/Google Java Format) + `.editorconfig`, im CI-Build prüfen. | M |
-| C-07 | Niedrig | `PantryItemSpecifications.java:11`; `adapter/in/web/*Request.java`, `*Response.java` | Sichtbarkeit uneinheitlich: `PantryItemSpecifications` ist `public`, alle anderen Persistence-Klassen package-private; DTO-Records `public`, Controller package-private. | `PantryItemSpecifications` package-private (`final`). | S |
-| C-08 | Niedrig | `ShoppingListService.java:89-94` | `checkOff` lädt den Artikel zweimal (Filter, dann erneut in `restock`). | Akzeptabel; bei Bedarf Household-Check in `restock` belassen und den Vorab-Load sparen. | S |
-| C-09 | Niedrig (unsicher) | `Jpa*Repository.save(...)` | Entities haben vorab vergebene UUIDs, kein `@Version`/`Persistable` → Spring Data hält jede Entity für „nicht neu“ und macht `merge` (zusätzliches `SELECT` vor jedem Insert). Nicht gemessen. | `Persistable<UUID>` mit `isNew` oder `@Version`-Spalte. | M |
-| C-10 | Niedrig | `PantryItemController.java:54` vs. `StorageLocationController.java:26-30`, `HouseholdController.java:36-40`, `ShoppingListController.java:61-66` | Nur `POST /api/pantry-items` liefert einen `Location`-Header; die anderen `201`-Antworten nicht. | Einheitlich `Location` setzen (ggf. mit `ServletUriComponentsBuilder`). | S |
+| Schritt | Befunde | Was | Warum an dieser Stelle | Aufwand |
+|---|---|---|---|---|
+| **1** | N-11 | `v0.7.0` auf `main` taggen und pushen; im Actions-Log prüfen, dass der Job `image` das Image `:0.7.0` veröffentlicht. | Schließt M7 ab; Voraussetzung dafür, dass der Betrieb eine feste Version nutzen kann. Unabhängig von allem anderen. | S |
+| **2** | R-09, (B-03) | Repo-Einstellungen: Private vulnerability reporting, Dependabot alerts und security updates, Branch Protection für `main` (Pflicht-Check `CI / build`), GHCR-Paket öffentlich. | Nur Klicks, kein Code. Branch Protection sichert alle folgenden Schritte ab; die Alerts decken den Schwachstellen-Teil von B-03 bereits ab. | S |
+| **3** | – | Neuen Branch `milestones/milestone8` anlegen, Version auf `0.8.0-SNAPSHOT`, CHANGELOG-Abschnitt `[0.8.0] – unveröffentlicht`. | Laut README-Release-Ablauf; ab jetzt heißen lokale Builds nicht mehr wie ein Release. | S |
+| **4** | N-10 | `tasks.registering` durch `tasks.register<Test>("unitTest")` ersetzen. | Klein und isoliert; verhindert, dass ein Dependabot-PR auf Gradle 10 den Build bricht. | S |
+| **5** | R-05 | Qodana an den CI-Job hängen bzw. Coverage-Artefakt übernehmen statt Tests doppelt laufen zu lassen. | Halbiert die CI-Zeit für alle folgenden PRs; reine Workflow-Änderung. | S |
+| **6** | C-06, N-06 | Spotless einführen. Commit 6a: nur Plugin und Konfiguration. Commit 6b: `spotlessApply` über das ganze Projekt, **ohne** andere Änderungen. Commit 6c: `spotlessCheck` in `check`. | Muss vor allen weiteren Code-Änderungen kommen: Danach sind Diffs frei von Formatierungsrauschen, und die Wildcard-Imports verschwinden automatisch. | M |
+| **7** | K-03 | Repositories einheitlich `…ShoppingListEntryRepository` benennen (IDE-Refactoring). | Reine Umbenennung nach dem Formatter, damit der Diff nur Namen zeigt. | S |
+| **8** | B-05 | `serialVersionUID` oder `-Xlint:-serial`; optional `-Xlint:all -Werror` im Build, damit neue Warnungen auffallen. | Kosmetik, profitiert aber vom sauberen Stand nach 6 und 7. | S |
+| **9** | B-03 (Rest), R-02 | Dependency Review Action für PRs; optional Dependency-Locking. PR-Vorlage mit Checkliste und `CODEOWNERS`. | Repo-Pflege; die PR-Vorlage hilft ab hier bei jedem Milestone-PR. | S–M |
+| **10** | K-01 | Sprache der Client-Texte festlegen und vereinheitlichen (Fehlermeldungen, OpenAPI), Tests mit Textprüfungen anpassen; dabei A-04 neu bewerten. | Erste Änderung mit sichtbarer API-Wirkung → im CHANGELOG unter „Geändert“; kommt nach den Aufräumschritten, damit der Diff nur Texte enthält. | M |
+| **11** | C-09 | `Persistable<UUID>` (oder `@Version` mit Flyway-Migration V8) und Test, dass ein Insert ohne vorheriges `SELECT` läuft. | Verhaltens- bzw. Schemaänderung im Persistenz-Adapter; braucht eigene Tests, daher spät und einzeln. | M |
+| **12** | S-06, N-05 | Optionales TLS-Profil (Caddy) in `deploy/compose.yaml`; Upgrade-Anleitung mit Keycloak 26.7 gegen ein M6-Volume durchspielen und README:367 aktualisieren. | Deployment-Themen zum Schluss; erfordern einen manuellen End-to-End-Test des Stacks. | M |
+| **13** | – | M8 abschließen: CHANGELOG `[0.8.0]`, Version `0.8.0`, PR, Merge, Tag `v0.8.0`, danach `0.9.0-SNAPSHOT`. | Gleicher Release-Ablauf wie in Schritt 1 und 3. | S |
 
-Positiv: keine verschluckten Exceptions, kein auskommentierter Code, keine TODO/FIXME-Altlasten, durchgehend Null-Checks in Konstruktoren, MDC wird per try-with-resources wieder entfernt, keine sensiblen Daten in Logs außer der pseudonymen `user.id` (siehe S-07).
+Schritte 1–2 gehen sofort und ohne Branch. Schritte 3–9 sind Aufräumarbeit ohne sichtbare Änderung für Nutzer und passen zusammen in M8;
+10–12 können wahlweise in M8 oder einen eigenen Milestone, weil sie API-Texte, Persistenz bzw. Deployment ändern.
 
-### 3.5 Architektur (Clean Architecture)
-
-| ID | Schweregrad | Ort (Datei:Zeile) | Befund | Empfohlener Fix | Aufwand |
-|---|---|---|---|---|---|
-| A-01 | Mittel | `application/*Service.java`, `CurrentHousehold.java:7,15`; `ArchitectureTest.java:25-29` | Application-Layer hängt von Spring ab (`@Service`, `@Component`, `@Transactional`). Die ArchUnit-Regel `domainIsFrameworkFree` prüft nur `domain`. Pragmatisch vertretbar, widerspricht aber der Doku (D-01). | Entweder bewusst akzeptieren und dokumentieren (+ ArchUnit-Regel: `application` nur `org.springframework.stereotype`/`transaction`), oder Beans in einer `@Configuration` im Adapter/Config verdrahten. | S (Doku) / M (Umbau) |
-| A-02 | Mittel | `ArchitectureTest.java:15-23`; `config/ClockConfiguration.java` | Paket `config` gehört zu keiner Schicht und wird nicht geprüft; `application.port` (`PageQuery`, `ResultPage`) ist weder `in` noch `out`. | `config` als eigene Schicht/Adapter in die Regel aufnehmen; `PageQuery`/`ResultPage` bewusst dokumentieren. | S |
-| A-03 | Mittel | `domain/ShoppingListEntry.java:10-14`; `UpdateShoppingListUseCase.java:8-15`; `ShoppingListService.java:66-78` | `ShoppingListEntry` kennt seinen Haushalt nicht; `UpdateShoppingListUseCase` ist ein öffentlicher Inbound-Port ohne Autorisierung (dokumentiert, `DOMAIN_MODEL.md` „Einkaufsliste aus Events“). Jeder künftige treibende Adapter, der ihn aufruft, umgeht die Haushaltsprüfung. | Port in ein internes Paket verschieben oder ArchUnit-Regel: nur `adapter.in.event` darf ihn nutzen. | S |
-| A-04 | Niedrig | `domain/StorageLocation.java:13` | Deutscher Default-Name `"Vorrat"` fest in der Domain – koppelt Fachmodell an eine Sprache. | Akzeptabel für eine deutschsprachige App; sonst über Konfiguration/Application setzen. | S |
-
-Positiv: Abhängigkeitsrichtung Adapter → Application → Domain wird von `onionArchitecture()` erzwungen und hält; Domain ohne Spring/Jakarta (geprüft); Persistenz mit eigenen JPA-Entities; Konfiguration und Secrets ausschließlich über Umgebungsvariablen. Die dokumentierte Paketstruktur entspricht bis auf D-07 der Realität.
-
-### 3.6 Tests
-
-| ID | Schweregrad | Ort | Befund | Empfohlener Fix | Aufwand |
-|---|---|---|---|---|---|
-| T-01 | Mittel | `build.gradle.kts:78-83` | JaCoCo erzeugt nur einen Report; keine `jacocoTestCoverageVerification`-Schwelle, die Abdeckung kann unbemerkt sinken. | Schwelle (z. B. Zeilen 90 %, Branches 75 %) in `check` einhängen. | S |
-| T-02 | Mittel | – | Keine Tests für Nebenläufigkeit/Constraint-Verletzungen (C-01) und keine für `IllegalStateException`-Pfade (C-02). | Integrationstest mit parallelen Requests bzw. direktem Constraint-Verstoß. | M |
-| T-03 | Niedrig | `README.md:16` | Teststrategie im README nur als Kommentar; Details stehen verteilt in `DOMAIN_MODEL.md`. | Abschnitt „Tests“ (Unit / Web-Slice / JPA mit Testcontainers / End-to-End / ArchUnit, Befehl, Coverage-Report-Pfad). | S |
-| T-04 | Niedrig | alle Testcontainers-Tests | Ohne Docker schlagen 60 von 213/214 Tests fehl (verifiziert); es gibt keine Möglichkeit, nur die schnellen Unit-Tests laufen zu lassen. | `@Tag("integration")` + eigene Gradle-Task oder `@Testcontainers(disabledWithoutDocker = true)`. | S |
-| T-05 | Niedrig | `HouseholdServiceTest.java:65`; `SpringSecurityCurrentUserProvider.java:27` | Unchecked-Warnung im Test; der Zweig „kein angemeldeter Nutzer“ ist ungetestet (1 Zeile Coverage-Lücke). | Kleiner Unit-Test. | S |
-
-Ergebnis: **214 Tests, alle grün, keine übersprungenen oder deaktivierten Tests**, kein `Thread.sleep`, keine auskommentierten Tests. Struktur: Domain-Unit-Tests, Service-Tests mit Mockito, `@WebMvcTest` mit echter `SecurityConfiguration`, `@DataJpaTest` mit Testcontainers, End-to-End-Tests (`HouseholdIsolationIntegrationTest`, `ShoppingListFlowIntegrationTest`, `OperationsIntegrationTest`), Migrationstest V6 → V7 und ArchUnit. Testnamen beschreiben Verhalten (`householdsDoNotSeeEachOthersData`), Arrange/Act/Assert erkennbar, feste `Clock` statt Systemzeit.
-
-### 3.7 Sicherheit und Konfiguration
-
-| ID | Schweregrad | Ort (Datei:Zeile) | Befund | Empfohlener Fix | Aufwand |
-|---|---|---|---|---|---|
-| S-01 | **Hoch** | `deploy/compose.yaml:43, 59`; `dev/keycloak/storagekeeper-realm.json:3, 10-14, 37, 46, 55` | Die Produktions-Compose-Datei importiert den Realm aus `dev/`, der laut eigener Beschreibung „Nur für lokale Entwicklung“ ist: Testnutzer mit Passwort = Benutzername und ein Public Client mit Resource-Owner-Password-Grant (`directAccessGrantsEnabled: true`, in OAuth 2.1 abgeschafft). Absicherung hängt allein am README-Hinweis (`README.md:296-297`), die Nutzer manuell zu löschen. | Eigenen Produktions-Realm `deploy/keycloak/` ohne Nutzer, Client mit Authorization Code + PKCE; Dev-Realm nur in `compose.yaml`. | M |
-| S-02 | Mittel | `deploy/compose.yaml:52`; `deploy/postgres/init-keycloak.sql:2` | App und Keycloak nutzen denselben DB-Nutzer `storagekeeper` (Owner beider Datenbanken). Kompromittierung der App ⇒ Zugriff auf Keycloak-Daten (Passwort-Hashes) und umgekehrt. | Eigener DB-Nutzer und Passwort für Keycloak. | S |
-| S-03 | Mittel | `adapter/in/web/SecurityConfiguration.java:39` | Swagger UI und `/v3/api-docs` sind auch in Produktion öffentlich. | Über Property abschaltbar machen (`springdoc.api-docs.enabled=false` im Deployment) oder hinter Auth. | S |
-| S-04 | Mittel | `SecurityConfiguration.java:73-87`; `application.yaml` (`show-details: always`) | Actuator-Port ohne jede Authentifizierung inkl. Health-Details; Schutz nur über Netzwerk (bewusst, gut dokumentiert). Keine zweite Verteidigungslinie, falls der Port doch veröffentlicht wird. | Optional Basic-Auth für Prometheus oder `show-details: when-authorized`. | S |
-| S-05 | Niedrig | `deploy/.env.example:3-4` | Platzhalter `change-me` wird nicht abgewiesen; Stack startet damit. | Kurzer Check im README oder Entrypoint, alternativ keinen Default-Wert vorgeben. | S |
-| S-06 | Niedrig | `deploy/compose.yaml:57` (`KC_HTTP_ENABLED`) | HTTP ohne TLS; README:298-299 verlangt Reverse Proxy, Compose bringt keinen mit. | Optionales Caddy-Profil oder deutlicher Warnhinweis in der Compose-Datei. | M |
-| S-07 | Niedrig | `UserLoggingContextFilter.java:40` | Jede Logzeile enthält `user.id` (`sub`) – pseudonymisierte personenbezogene Daten (DSGVO); Aufbewahrung nicht dokumentiert. | Hinweis zur Log-Aufbewahrung im README „Betrieb“. | S |
-| S-08 | – | – | **Keine** echten Secrets im Arbeitsbaum oder in der Historie gefunden; `deploy/.env` ist ignoriert; Qodana-Token kommt aus `secrets`. Eingaben werden per Bean Validation und Value Objects geprüft; SQL nur über JPA/Criteria (keine String-Konkatenation) → kein SQL-Injection-Risiko gefunden; keine Dateipfade aus Eingaben, keine Java-Deserialisierung. | – | – |
-| S-09 | ungeprüft | Abhängigkeiten | Kein Schwachstellen-Scan konfiguriert oder lokal ausführbar (siehe B-03). | GitHub Dependabot Alerts aktivieren / Dependency-Check. | S |
-
-Beispiel-Konfiguration `deploy/.env.example` ist vorhanden und vollständig (alle in `deploy/compose.yaml` referenzierten Variablen). Für die lokale Entwicklung ist keine nötig.
-
-### 3.8 Konsistenz über alles hinweg
-
-| ID | Schweregrad | Ort | Befund | Empfohlener Fix | Aufwand |
-|---|---|---|---|---|---|
-| K-01 | Mittel | `HouseholdController.java:21`, `PantryItemController.java:24`, `OpenApiConfiguration.java:26` vs. `NoHouseholdException.java:9`, `ApiExceptionHandler.java:73` u. a. | Sprachmix in der API: OpenAPI-Tags/Beschreibung Deutsch, Fehlermeldungen (`detail`) Englisch, Default-Lagerort Deutsch (`StorageLocation.java:13`), Realm-Anzeige Deutsch. Code/Bezeichner einheitlich Englisch (gut). | Zielsprache für Client-Texte festlegen und vereinheitlichen. | M |
-| K-02 | Mittel | `.github/workflows/qodana_code_quality.yml:22-26` vs. `build.gradle.kts:15`, `ci.yml:17-21`, `README.md:4,11` | Java-Version: überall 25, nur Qodana 21. | Siehe R-05. | S |
-| K-03 | Niedrig | `ManualShoppingListRepository` vs. `SpringDataManualShoppingListEntryRepository`; `ShoppingListRepository` (für Entries); `ShoppingListJpaEntity.java` vs. Klasse `ShoppingListEntryJpaEntity` | Uneinheitliche Benennung der Einkaufslisten-Typen. | Einheitlich `…ShoppingListEntry…`. | S |
-| K-04 | Niedrig | Projektname | „StorageKeeper“ (Repo, README), `storagekeeper` (Artefakt, Image), fachlich „Pantry“/„Vorrat“ im Code; GitHub-Topics passen zu keinem davon. | Im README einen Satz zur Namensgebung; Topics anpassen (R-01). | S |
-| K-05 | Niedrig | `V5__create_shopping_list_entry.sql:4` | SQL-Stil: `primary key` klein, sonst `PRIMARY KEY`. | Nur in künftigen Migrationen beachten (bestehende nicht ändern). | – |
-
-## 4. Widerspruchsliste (Doku ↔ Realität)
-
-| # | Doku sagt | Realität | Beleg |
-|---|---|---|---|
-| 1 | „Die Application hängt weiterhin nur vom JDK ab, nicht von Spring.“ (`DOMAIN_MODEL.md:513-514`) | Services nutzen `@Service`, `@Component`, `@Transactional` | `HouseholdService.java:17-18`, `CurrentHousehold.java:7` |
-| 2 | `ExpiringPantryItemResponse` hat „dieselben Felder wie `PantryItemResponse`“ + 2 (`DOMAIN_MODEL.md:862`) | `minimumAmount`, `belowMinimum` fehlen | `ExpiringPantryItemResponse.java:16-25` |
-| 3 | Request-Ablauf: Controller → Service → Repository → Domain (`DOMAIN_MODEL.md:812-835`) | Zusätzlich `CurrentHousehold.require()`, `belongsTo`, Event-Publishing | `PantryItemService.java:93-130, 149-153` |
-| 4 | Javadoc: Request für `POST …/check-off`, `amount` = gekaufte Menge | Request für `POST /api/shopping-list/manual-entries` | `AddManualShoppingListEntryRequest.java:13-16`, `ShoppingListController.java:61-63` |
-| 5 | `PantryItemFellBelowMinimum`: „has reached its minimum stock“ | Event wird beim **Unterschreiten** ausgelöst | `PantryItemFellBelowMinimum.java:4`, `PantryItem.java:119-120` |
-| 6 | Paketstruktur ohne `config` und `application.port` (`README.md:302-317`) | Beide Pakete existieren | `config/ClockConfiguration.java`, `application/port/PageQuery.java` |
-| 7 | Realm „Nur für lokale Entwicklung“ (`storagekeeper-realm.json:3,10`) | Wird in der Produktions-Compose importiert | `deploy/compose.yaml:59` |
-| 8 | „Voraussetzungen: JDK 25 und Docker (für PostgreSQL)“ (`README.md:11`) | Docker auch für Keycloak und zwingend für 60 Tests | `compose.yaml:13-21`, Testlauf 1 |
-| 9 | Repository „in M1 in memory, from M2 on with JPA“ (`PantryItemRepository.java:17`) | Nur JPA-Adapter vorhanden | `adapter/out/persistence/` |
-| 10 | Java 25 (README, Build, CI) | Qodana-Workflow richtet JDK 21 ein | `qodana_code_quality.yml:22-26` |
-| 11 | Image-Tag „Version“ (`README.md:258-262`) | Immer `0.0.1-SNAPSHOT`, wird bei jedem Push überschrieben | `build.gradle.kts:10`, `ci.yml:64` |
-| 12 | GitHub-About: keine Beschreibung, Topics `household`, `organisation` | README: „Pantry-App – Java 25, Spring Boot 4, Ports & Adapters“ | GitHub-API, `README.md:4` |
-| 13 | V2-Kommentar: „its id is `StorageLocationId.Default` in the code“ | Konstante existiert nicht mehr (seit M5) | `V2__create_storage_location.sql:10` (nicht ändern) |
-
-Geprüft und **übereinstimmend**: Ports 8080/8081/8180/9090, Umgebungsvariablen (`STORAGEKEEPER_ISSUER_URI`, `STORAGEKEEPER_MANAGEMENT_PORT`, `STORAGEKEEPER_LOG_FORMAT`, `.env`-Variablen), alle REST-Endpunkte, Statuscodes und Fehler-Mapping, Paging-Grenzen (20/100), `days` 0–365, Einheiten, Metrikname `storagekeeper.domain.events`, Image-Name, Health-Gruppen, Migrationsbeschreibungen V1–V7, Versionen (Spring Boot 4.1.1, Gradle 9.4.1, PostgreSQL 18, Keycloak 26.4).
-
-## 5. Priorisierter Maßnahmenplan
-
-**Quick Wins (je < 1 h, wenig Risiko)**
-1. Doku-Korrekturen: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-09, D-10, D-12 (ein Commit „docs“).
-2. Build-Aufräumen: B-01 (Swagger-Plugin raus), B-02 (Jackson-Override begründen/entfernen), B-04 (Datei umbenennen), B-06 (Wildcard-Imports), C-07.
-3. CI: R-04 (Trigger), R-05/K-02 (Qodana JDK 25, `contents: read`), R-06 (`build` statt `test`), R-07 (Badge), R-08 (`.gitignore`).
-4. Kleine Code-Fixes: C-03 (`addedAt`-Check, `equals`), C-05 (Konstanten), C-04 (Transaktionsannotationen vereinheitlichen), B-05 (`Household` final).
-5. GitHub-About und Topics setzen (R-01), Repo-Settings prüfen (R-09).
-
-**Sollte bald**
-1. S-01: Produktions-Realm ohne Testnutzer und ohne Password-Grant.
-2. S-02: Eigener DB-Nutzer für Keycloak.
-3. C-01 + C-02 + T-02: Constraint-Verletzungen auf `409` mappen, eigene Domain-Validierungs-Exception, Tests dazu.
-4. R-03: Versionierung, Tags und CHANGELOG ab M6.
-5. T-01, T-04: Coverage-Schwelle, Integrationstests taggen.
-6. B-03/R-02: Dependabot, `SECURITY.md`, Schwachstellen-Scan.
-7. S-03, S-07, D-08, T-03: Swagger in Produktion abschaltbar, README-Abschnitte Tests/Lizenz/Mitwirken/Log-Aufbewahrung.
-
-**Langfristig**
-1. A-01/A-02/A-03: ArchUnit-Regeln für Application-Layer, `config` und internen Event-Port.
-2. C-06: Formatter (Spotless) + `.editorconfig` im CI.
-3. K-01: Sprachkonzept für Client-Texte (ggf. i18n).
-4. C-09, C-10, S-04, S-06: `Persistable`, einheitliche `Location`-Header, Actuator-Härtung, TLS-Profil in Compose.
-
-## 6. Checkliste
+## 5. Checkliste
 
 | Kategorie | Status | Anmerkung |
 |---|---|---|
-| 1. README und Projektdokumentation | geprüft | Anleitungen `bootRun`/Deployment nur statisch geprüft (Keycloak-/App-Image nicht gestartet) |
-| 2. GitHub-Repository-Metadaten | teilweise | About/Topics/Lizenz/Releases/Actions per API geprüft; Branch Protection, Security-Settings, GHCR-Sichtbarkeit nur manuell prüfbar |
-| 3. Imports, Abhängigkeiten und Build | geprüft | Clean Build mit JDK 25 erfolgreich, `-Xlint:all` ausgewertet; `bootBuildImage` nicht ausgeführt |
-| 4. Code-Qualität | geprüft | Alle 115 Java-Produktivdateien gelesen; C-01 und C-09 nicht reproduziert (unsicher) |
-| 5. Architektur | geprüft | ArchUnit läuft grün; Abweichungen siehe A-01 bis A-04 |
-| 6. Tests | geprüft | 214/214 grün, Coverage 98,2 % Zeilen / 81,5 % Branches |
-| 7. Sicherheit und Konfiguration | teilweise | Secret-Scan inkl. Historie, Konfiguration geprüft; Schwachstellen-Scan der Abhängigkeiten nicht möglich (kein Tool) |
-| 8. Konsistenz | geprüft | Widerspruchsliste Abschnitt 4 |
+| 1. README und Projektdokumentation | geprüft | offen nur README:367 (N-05) |
+| 2. GitHub-Repository-Metadaten | teilweise | Tags, Actions per API; Einstellungen nur manuell (R-09) |
+| 3. Imports, Abhängigkeiten und Build | geprüft | Clean Build grün; N-10, B-03, B-05 |
+| 4. Code-Qualität | geprüft | C-06/N-06, K-03, C-09 |
+| 5. Architektur | geprüft | ArchUnit grün, keine offenen Befunde |
+| 6. Tests | geprüft | 241/241 grün, Coverage-Gate erfüllt, keine offenen Befunde |
+| 7. Sicherheit und Konfiguration | teilweise | beide Realms mit Keycloak 26.7 geprüft; Scan und Repo-Einstellungen offen (B-03, R-09), S-06 |
+| 8. Konsistenz | geprüft | K-01, K-03 |
