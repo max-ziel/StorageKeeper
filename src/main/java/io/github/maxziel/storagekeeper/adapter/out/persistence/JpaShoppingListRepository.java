@@ -1,6 +1,7 @@
 package io.github.maxziel.storagekeeper.adapter.out.persistence;
 
 import io.github.maxziel.storagekeeper.application.port.out.ShoppingListRepository;
+import io.github.maxziel.storagekeeper.domain.HouseholdId;
 import io.github.maxziel.storagekeeper.domain.PantryItemId;
 import io.github.maxziel.storagekeeper.domain.ShoppingListEntry;
 import io.github.maxziel.storagekeeper.domain.ShoppingListEntryId;
@@ -27,8 +28,8 @@ class JpaShoppingListRepository implements ShoppingListRepository {
     }
 
     @Override
-    public List<ShoppingListEntry> findAll() {
-        return jpaRepository.findAllByOrderByAddedAtAsc().stream()
+    public List<ShoppingListEntry> findAll(HouseholdId householdId) {
+        return jpaRepository.findAllForHousehold(householdId.value()).stream()
                 .map(ShoppingListEntryJpaEntity::toDomain)
                 .toList();
     }

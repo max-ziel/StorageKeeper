@@ -19,6 +19,7 @@ class ArchitectureTest {
             .adapter("persistence", "..adapter.out.persistence..")
             .adapter("events-in", "..adapter.in.event..")
             .adapter("events-out", "..adapter.out.event..")
+            .adapter("security", "..adapter.out.security..")
             .withOptionalLayers(true);
 
     @ArchTest

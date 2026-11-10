@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: storagekeeper
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # Management port of the app, only reachable inside the compose network.
+      - targets: ["app:8081"]

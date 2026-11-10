@@ -19,6 +19,9 @@ class PantryItemJpaEntity {
     @Id
     private UUID id;
 
+    @Column(name = "household_id", nullable = false)
+    private UUID householdId;
+
     @Column(nullable = false, length = ItemName.MAX_LENGTH)
     private String name;
 
@@ -47,6 +50,7 @@ class PantryItemJpaEntity {
         PantryItemJpaEntity entity = new PantryItemJpaEntity();
 
         entity.id = pantryItem.getPantryItemId().value();
+        entity.householdId = pantryItem.getHouseholdId().value();
         entity.name = pantryItem.getItemName().value();
         entity.amount = pantryItem.getQuantity().amount();
         entity.unit = pantryItem.getQuantity().unit();
@@ -60,6 +64,7 @@ class PantryItemJpaEntity {
     PantryItem toDomain() {
         return new PantryItem(
                 new PantryItemId(id),
+                new HouseholdId(householdId),
                 new ItemName(name),
                 new Quantity(amount, unit),
                 expiryDate,

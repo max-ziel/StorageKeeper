@@ -13,6 +13,12 @@ public class PantryItemSpecifications {
     private PantryItemSpecifications() {
     }
 
+    /** {@code household_id = ?} */
+    static Specification<PantryItemJpaEntity> inHousehold(UUID householdId) {
+        return (root, _, cb) ->
+                cb.equal(root.get("householdId"), householdId);
+    }
+
     /** {@code storage_location_id = ?} */
     static Specification<PantryItemJpaEntity> inStorageLocation(UUID storageLocationId) {
         return (root, _, cb) ->

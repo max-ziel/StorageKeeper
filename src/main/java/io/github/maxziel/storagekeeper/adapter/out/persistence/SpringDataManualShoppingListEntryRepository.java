@@ -8,5 +8,5 @@ import java.util.UUID;
 /** Spring Data generates the implementation at runtime. Only used by {@link JpaManualShoppingListRepository}. */
 interface SpringDataManualShoppingListEntryRepository extends JpaRepository<ManualShoppingListEntryJpaEntity, UUID> {
 
-    List<ManualShoppingListEntryJpaEntity> findAllByOrderByAddedAtAsc();
+    List<ManualShoppingListEntryJpaEntity> findByHouseholdIdOrderByAddedAtAsc(UUID householdId);
 }
